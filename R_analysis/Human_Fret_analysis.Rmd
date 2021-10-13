@@ -1,0 +1,153 @@
+---
+title: "Human FRET analysis"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_float: 
+      collapsed: false
+    theme: cerulean
+---
+
+
+
+
+# Loaded data
+
+load libraries, Set WD and import the data.
+```{r}
+
+library(readr)
+library(plyr)
+library(forcats)
+library(lme4)
+library(ggplot2)
+library(stargazer)
+library(lmerTest)
+library(rcompanion)
+library(dplyr)
+library(tidyverse)
+library(emmeans)
+library(reshape2)
+library(tidyr)
+library(qwraps2)
+library(arsenal)
+library(table1)
+library(plotrix)
+library(ggResidpanel)
+
+
+
+setwd("D:/TMEM97_Study/R_Analysis/R_Analysis_TMEM97/Human/FRET_Analysis")
+
+
+dataMCC <- read_csv2("Human_cases_FRET_All.csv", col_types = cols (
+  BBN = 'f',
+  Image_name = 'f',
+  diagnosis = 'f',
+  ApoE_genotype = 'f',
+  APOE4_status = 'f',
+  sex = 'f',
+  diagnosis = 'f',
+  Braak_stage = 'f',
+  Thal_phase = 'f',
+  Plaque_type = 'f',
+  block = 'f',
+  FRET_group = 'f',
+  BBN_fret= 'f'
+))
+
+
+```
+
+
+
+# Summary tables
+
+```{r}
+
+#Create new dataframe with means per case for plotting use na.rm=T to ignore empty cells that are automatically filled with NA
+
+dataMCC %>%
+  group_by(BBN_fret) %>%
+  summarize(APOE4_status=APOE4_status[1],
+            diagnosis=diagnosis[1],
+            sex=sex[1],
+            age_at_death=age_at_death[1],
+            PMI=PMI[1],
+            Fret_Positive=mean(Fret_Positive, na.rm=T),
+            FRET_group=FRET_group[1],
+           
+            ) -> CaseMeans
+
+
+# Create a summary table of demographics of cases in AT study
+
+
+
+table1::label(CaseMeans$sex) <- "sex"
+table1::label(CaseMeans$age_at_death) <- "age at death"
+table1::label(CaseMeans$PMI) <- "PMI"
+table1::label(CaseMeans$Fret_Positive) <- "% positive FRET"
+
+	
+table1::table1(~ sex + age_at_death + PMI + Fret_Positive | FRET_group, data = CaseMeans)
+
+
+
+
+
+```
+
+
+# Mixed models with Tukey
+
+## FRET
+```{r}
+
+
+ME_Fret_Positive <- lmer(Fret_Positive~FRET_group+sex+(1|BBN_fret),data = dataMCC)
+summary(ME_Fret_Positive)
+resid_panel(ME_Fret_Positive)
+# very significant plaque distance effect and also effect of sex with f more abeta than m
+
+library(multcomp)
+summary(glht(ME_Fret_Positive, linfct = mcp(FRET_group = "Tukey")), test = adjusted("holm"))
+
+
+pFret_Positive <- ggplot(dataMCC, aes(x = FRET_group, y = Fret_Positive, fill = FRET_group)) +
+
+  annotate(geom = "rect", xmin = -Inf, xmax = Inf,ymin = 83.35, ymax = 2.23, fill = "darkseagreen2", alpha = 0.6) +
+  #annotate(geom = "rect", xmin = -Inf, xmax = Inf,ymin = 93.11, ymax = 73.59, fill = "darkseagreen2", alpha = 0.8) +
+  #annotate(geom = "rect", xmin = -Inf, xmax = Inf,ymin = 5.45, ymax = 0, fill = "darkseagreen2", alpha = 0.8) +
+  
+  stat_boxplot(geom ='errorbar', width = 0.2) +  #  adds the little horizontal lines on top and bottom of whiskers
+    geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+#  stat_summary(fun.y = max, fun.ymax = length, geom = "text", aes(label = ..ymax..), vjust = -2)  + #adds group n's above bars
+  geom_point(data = CaseMeans, aes(x = FRET_group, y = Fret_Positive, shape=sex, size = 5), position = position_jitter(w = 0.1, h = 0.0)) + # Makes data points means of each case and makes the points offset in the x direction so they don't overlap and makes males circles and females triangles
+  ylim(0,100) + #sets y axis limits
+  ylab("% synaptic FRET (px)")  + # sets the y-axis label
+  xlab("")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) #makes outlines and dots black
+  #scale_fill_manual(values=c("springgreen3","springgreen4",)) # fills bars with colors I want
+ 
+
+pFret_Positive + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank())  +theme(text = element_text(size=25))
+pFret_Positive_panel <- pFret_Positive + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank()) 
+
+
+
+
+
+
+
+```
+
+
+
+
+
+
+

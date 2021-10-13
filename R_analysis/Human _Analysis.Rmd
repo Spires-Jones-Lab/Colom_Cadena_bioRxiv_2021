@@ -1,0 +1,1073 @@
+---
+title: "Human analysis"
+output:
+  html_document:
+    df_print: paged
+    theme: cerulean
+    toc: yes
+    toc_float:
+      collapsed: no
+  pdf_document:
+    toc: yes
+---
+
+
+
+
+# Loaded data
+
+load libraries, Set WD and import the data.
+```{r}
+
+library(readr)
+library(plyr)
+library(forcats)
+library(lme4)
+library(ggplot2)
+library(stargazer)
+library(lmerTest)
+library(rcompanion)
+library(dplyr)
+library(tidyverse)
+library(emmeans)
+library(reshape2)
+library(tidyr)
+library(qwraps2)
+library(arsenal)
+library(table1)
+library(plotrix)
+library(ggResidpanel)
+
+#install.packages("corrplot")
+source("http://www.sthda.com/upload/rquery_cormat.r")
+
+
+ setwd("D:/TMEM97_Study/R_Analysis/R_Analysis_TMEM97/Human/Coloc_and_density")
+ 
+ 
+ dataMCC <- read_csv2("Human_cases.csv", col_types = cols (
+   BBN = 'f',
+   Image_name = 'f',
+   diagnosis = 'f',
+   ApoE_genotype = 'f',
+   APOE4_status = 'f',
+   sex = 'f',
+   diagnosis = 'f',
+   Braak_stage = 'f',
+   Thal_phase = 'f',
+   Plaque_type = 'f',
+   block = 'f'
+ ))
+
+ 
+
+```
+
+For the first variable of interest (% PSD with TMEM97), visualize the data in box plot. Males = circles, females = triangles
+
+
+
+
+# Summary tables
+
+```{r}
+
+# First, will  the data - assign levels to compare everything to control and APOE3 in models
+
+dataMCC$diagnosis <- relevel(dataMCC$diagnosis, ref = "control")
+dataMCC$APOE4_status <- relevel(dataMCC$APOE4_status, ref = "APOE3")
+
+
+# For plaque distance, subset to just those rows with plaque distance data and remove other rows except metadata
+
+dataMCC_tidy <- dataMCC
+
+dataMCC_tidy$PSD95_density <- NULL 
+dataMCC_tidy$TMEM97_density <- NULL 
+dataMCC_tidy$Abeta_density <- NULL 
+dataMCC_tidy$PSD95_with_TMEM97 <- NULL 
+dataMCC_tidy$PSD95_with_Abeta <- NULL 
+dataMCC_tidy$PSD95_with_TMEM97_and_Abeta <- NULL 
+
+
+# Use pivot_longer to transpose each of the plaque distance columns into a new dataframe
+dataMCC_tydy2 <-
+dataMCC_tidy %>% 
+  pivot_longer(
+    cols = starts_with("PSD95_den"), 
+    #names_to = () 
+    values_to = "rank",
+    values_drop_na = TRUE
+  )
+
+dataMCC_tydy3 <-
+dataMCC_tidy %>% 
+  pivot_longer(
+    cols = starts_with("TMEM97"), 
+    #names_to = () 
+    values_to = "rank",
+    values_drop_na = TRUE
+  )
+
+dataMCC_tydy4 <-
+dataMCC_tidy %>% 
+  pivot_longer(
+    cols = starts_with("PSD95_with_TMEM97"), 
+    #names_to = () 
+    values_to = "rank",
+    values_drop_na = TRUE
+  )
+
+dataMCC_tydy5 <-
+dataMCC_tidy %>% 
+  pivot_longer(
+    cols = starts_with("PSD95_with_abeta_and_TMEM97"), 
+    #names_to = () 
+    values_to = "rank",
+    values_drop_na = TRUE
+  )
+
+dataMCC_tydy6 <-
+dataMCC_tidy %>% 
+  pivot_longer(
+    cols = starts_with("PSD95_with_abeta1"), 
+    #names_to = () 
+    values_to = "rank",
+    values_drop_na = TRUE
+  )
+
+plaque_dist_data <-
+dataMCC_tidy %>% 
+  pivot_longer(
+    cols = starts_with("Abeta"), 
+    #names_to = () 
+    values_to = "rank",
+    values_drop_na = TRUE,
+  )
+
+
+ 
+# combine all transposed plaque distance data and remove remaning non-transposed columns
+
+plaque_dist_data$PSD95_density <- dataMCC_tydy2$rank
+plaque_dist_data$TMEM97_density <- dataMCC_tydy3$rank
+plaque_dist_data$PSD95_with_TMEM97 <- dataMCC_tydy4$rank
+plaque_dist_data$PSD95_with_TMEM97_and_Abeta <- dataMCC_tydy5$rank
+plaque_dist_data$PSD95_with_Abeta <- dataMCC_tydy6$rank
+plaque_dist_data <- rename(plaque_dist_data, Abeta_density = rank)
+plaque_dist_data <- rename(plaque_dist_data, plaque_distance = name)
+plaque_dist_data$PSD95_den_10 <- NULL
+plaque_dist_data$PSD95_den_20 <- NULL
+plaque_dist_data$PSD95_den_30 <- NULL
+plaque_dist_data$PSD95_den_40 <- NULL
+plaque_dist_data$PSD95_den_50 <- NULL
+plaque_dist_data$TMEM97_10 <- NULL
+plaque_dist_data$TMEM97_20 <- NULL
+plaque_dist_data$TMEM97_30 <- NULL
+plaque_dist_data$TMEM97_40 <- NULL
+plaque_dist_data$TMEM97_50 <- NULL
+plaque_dist_data$PSD95_with_abeta1_10 <- NULL
+plaque_dist_data$PSD95_with_abeta1_20 <- NULL
+plaque_dist_data$PSD95_with_abeta1_30 <- NULL
+plaque_dist_data$PSD95_with_abeta1_40 <- NULL
+plaque_dist_data$PSD95_with_abeta1_50 <- NULL
+plaque_dist_data$PSD95_with_abeta_and_TMEM97_10 <- NULL
+plaque_dist_data$PSD95_with_abeta_and_TMEM97_20 <- NULL
+plaque_dist_data$PSD95_with_abeta_and_TMEM97_30 <- NULL
+plaque_dist_data$PSD95_with_abeta_and_TMEM97_40 <- NULL
+plaque_dist_data$PSD95_with_abeta_and_TMEM97_50 <- NULL
+plaque_dist_data$PSD95_with_TMEM97_10 <- NULL
+plaque_dist_data$PSD95_with_TMEM97_20 <- NULL
+plaque_dist_data$PSD95_with_TMEM97_30 <- NULL
+plaque_dist_data$PSD95_with_TMEM97_40 <- NULL
+plaque_dist_data$PSD95_with_TMEM97_50 <- NULL
+
+plaque_dist_data <- plaque_dist_data %>%
+     mutate(plaque_distance=sub("Abeta_","", plaque_distance))
+
+plaque_dist_data <- plaque_dist_data %>%
+     mutate(plaque_distance=sub(" ","", plaque_distance))
+
+plaque_dist_data$plaque_distance <- (as.numeric(plaque_dist_data$plaque_distance))
+write.csv(x=plaque_dist_data, file="plaque_dist_data.csv")
+
+plaque_dist_data$plaque_distance_factor <- as.factor(plaque_dist_data$plaque_distance)
+plaque_dist_data$plaque_distance_factor <- relevel(plaque_dist_data$plaque_distance_factor, ref = "50")
+
+#Create new dataframe with means per case of plaque distance data for plotting use na.rm=T to ignore empty cells that are automatically filled with NA
+
+plaque_dist_data %>%
+  group_by(BBN, plaque_distance) %>%
+  summarize(APOE4_status=APOE4_status[1],
+            diagnosis=diagnosis[1],
+            sex=sex[1],
+            age_at_death=age_at_death[1],
+            PMI=PMI[1],
+            PSD95_density=mean(PSD95_density, na.rm=T),
+            TMEM97_density=mean(TMEM97_density, na.rm=T),
+            PSD95_with_TMEM97=median(PSD95_with_TMEM97, na.rm=T),
+            Abeta_density=mean(Abeta_density, na.rm=T),
+            ) -> plaque_dist_CaseMeans
+
+
+
+#Create new dataframe with means per case for plotting use na.rm=T to ignore empty cells that are automatically filled with NA
+
+dataMCC$Abeta_density <- as.numeric(as.character(dataMCC$Abeta_density))
+#dataMCC$PSD95_density <- as.numeric(as.character(dataMCC$PSD95_density))
+#dataMCC$TMEM97_density <- as.numeric(as.character(dataMCC$TMEM97_density))
+
+dataMCC %>%
+  group_by(BBN) %>%
+  summarize(APOE4_status=APOE4_status[1],
+            diagnosis=diagnosis[1],
+            sex=sex[1],
+            age_at_death=age_at_death[1],
+            PMI=PMI[1],
+            PSD95_density=mean(PSD95_density, na.rm=T),
+            TMEM97_density=mean(TMEM97_density, na.rm=T),
+            Abeta_density=mean(Abeta_density, na.rm=T),
+            PSD95_with_TMEM97=median(PSD95_with_TMEM97, na.rm=T),
+            PSD95_with_Abeta=median(PSD95_with_Abeta, na.rm=T),
+            PSD95_with_TMEM97_and_Abeta=median(PSD95_with_TMEM97_and_Abeta, na.rm=T),
+            brain_weight=brain_weight[1],
+            ) -> CaseMeans
+
+
+# Create a summary table of demographics of cases in AT study
+
+
+table1::label(CaseMeans$APOE4_status) <- "APOE4 status"
+table1::label(CaseMeans$sex) <- "sex"
+table1::label(CaseMeans$age_at_death) <- "age at death"
+table1::label(CaseMeans$PMI) <- "PMI"
+	
+table1::table1(~ APOE4_status + sex + age_at_death + PMI | diagnosis, data = CaseMeans)
+
+
+
+
+
+```
+```{r}
+
+# Create a summary table of results of AT study
+
+
+table1::label(dataMCC$PSD95_density) <- "PSD95 density (PSD95/mm3)"
+table1::label(dataMCC$TMEM97_density) <- "TMEM97 density (TMEM97/mm3)"
+table1::label(dataMCC$Abeta_density) <- "Abeta density (Abeta/mm3)"
+table1::label(dataMCC$PSD95_with_TMEM97) <- "% PSDs with TMEM97"
+table1::label(dataMCC$PSD95_with_Abeta) <- "SPSDs with Abeta"
+table1::label(dataMCC$PSD95_with_TMEM97_and_Abeta) <- "%PSDs with TMEM97 and Abeta"
+
+table1::table1(~ PSD95_density + TMEM97_density + Abeta_density + PSD95_with_TMEM97 + PSD95_with_Abeta +PSD95_with_TMEM97_and_Abeta | diagnosis, data = dataMCC)
+```
+Create table of some of the plaque distance data
+
+```{r}
+# Create a summary table of results of AT study
+
+
+table1::label(plaque_dist_data$PSD95_density) <- "PSD95 density (PSD95/mm3)"
+table1::label(plaque_dist_data$TMEM97_density) <- "TMEM97 density (TMEM97/mm3)"
+table1::label(plaque_dist_data$Abeta_density) <- "Abeta density (Abeta/mm3)"
+table1::label(plaque_dist_data$PSD95_with_TMEM97) <- "% PSDs with TMEM97"
+table1::label(plaque_dist_data$PSD95_with_Abeta) <- "% PSDs with Abeta "
+table1::label(plaque_dist_data$PSD95_with_TMEM97_and_Abeta) <- "%PSDs with TMEM97 and Abeta"
+
+table1::table1(~ PSD95_density + TMEM97_density + Abeta_density + PSD95_with_TMEM97 + PSD95_with_Abeta +PSD95_with_TMEM97_and_Abeta | diagnosis + plaque_distance, data = plaque_dist_data)
+```
+
+
+Check for differences between groups in age_at_death
+
+
+
+# Clinicopathological variables
+
+## Age at death
+```{r}
+
+# Create boxplot
+
+pAge <- ggplot(CaseMeans, aes(x = diagnosis, y = age_at_death, fill = diagnosis)) +
+  stat_boxplot(geom ='errorbar', width = 0.2) +  #  adds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+  stat_summary(fun.y = max, fun.ymax = length, geom = "text", aes(label = ..ymax..), vjust = -2)  + #adds group n's above bars
+  geom_point(position = position_jitter(w = 0.1, h = 0.0), aes(shape = sex)) + #  makes the points offset in the x direction so they don't overlap and makes males circles and females triangles
+  ylim(0,100) + #sets y axis limits
+  ylab("age (years)")  + # sets the y-axis label
+  xlab("")  + # sets the x-axis label
+  theme_classic(base_size = 14) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("grey70","springgreen3")) # fills bars with colors I want
+pAge + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x = element_blank())
+
+# check assumptions for t-test, data not normal so run Wilcoxon 
+with(CaseMeans, shapiro.test(age_at_death[diagnosis == "AD"]))# p = 0.4001
+with(CaseMeans, shapiro.test(age_at_death[diagnosis == "control"])) # p = 0.006373
+wilcox.test(age_at_death~diagnosis, data = CaseMeans)
+#There is not a significant difference in age W = 10.5, p-value = 0.05595
+
+```
+
+Check for differences between groups in PMI - no difference in t-test
+
+
+
+## PMI
+
+```{r}
+
+# Create boxplot
+
+pPMI <- ggplot(CaseMeans, aes(x = diagnosis, y = PMI, fill = diagnosis)) +
+  stat_boxplot(geom ='errorbar', width = 0.2) +  #  adds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+  stat_summary(fun.y = max, fun.ymax = length, geom = "text", aes(label = ..ymax..), vjust = -2)  + #adds group n's above bars
+  geom_point(position = position_jitter(w = 0.1, h = 0.0), aes(shape = sex)) + #  makes the points offset in the x direction so they don't overlap and makes males circles and females triangles
+#  ylim(0,100) + #sets y axis limits
+  ylab("Post-mortem interval (hours)")  + # sets the y-axis label
+  xlab("")  + # sets the x-axis label
+  theme_classic(base_size = ) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("grey70","springgreen3")) # fills bars with colors I want
+pPMI + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x = element_blank())
+
+# check assumptions for t-test, data not normal so run Wilcoxon
+with(CaseMeans, shapiro.test(PMI[diagnosis == "AD"])) #p=0.3546
+with(CaseMeans, shapiro.test(PMI[diagnosis == "control"])) # W = 0.81791, p-value = 0.08464
+t.test(PMI~diagnosis, data = CaseMeans)
+# There IS a difference in PMI with AD longer t = -2.168, df = 12.72, p-value = 0.04975
+
+```
+
+Check for diagnosis and sex differences in % PSD with TMEM97, using case as a random variable to account for multiple measurements per case and PMI as random variables (since PMI was different between groups) to account for potential effects of these. Left APOE out of this model as there are no APOE4 cases in controls. Significant effect of disease but not sex in this model.
+
+```{r}
+
+
+# check assumptions for t-test, data not normal so run Wilcoxon
+with(CaseMeans, shapiro.test(brain_weight[diagnosis == "AD"])) #p=0.1924
+with(CaseMeans, shapiro.test(brain_weight[diagnosis == "control"])) # W = 0.77776, p-value = 0.03673
+wilcox.test(brain_weight~diagnosis, data = CaseMeans)
+# There is NO difference in brain_weight with AD W = 36, p-value = 0.3277
+
+chisq.test(CaseMeans$APOE4_status, CaseMeans$diagnosis)
+#X-squared = 4.1782, df = 1, p-value = 0.04095
+```
+
+# Mixed models whole image
+
+
+## Densities
+
+
+### PSD95 density
+```{r}
+
+#linear mixed effects model taking into account measurements came from within same case (BBN). ***NOTE FOR plaque distane measurements, use (1|BBN/Image_Name) to take into account that plaque distances were measured within the same image_at_death so nested within image_at_death then within case.****
+
+ME_PSD95_density<- lmer(PSD95_density~diagnosis+sex+(1|BBN)+(1|PMI),data = dataMCC)
+summary(ME_PSD95_density)
+resid_panel(ME_PSD95_density)
+# No effects of AD or sex
+
+pPSD_density <- ggplot(dataMCC, aes(x = diagnosis, y = PSD95_density, fill = diagnosis)) +
+  stat_boxplot(geom ='errorbar', width = 0.2) +  #  adds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+#  stat_summary(fun.y = max, fun.ymax = length, geom = "text", aes(label = ..ymax..), vjust = -2)  + #adds group n's above bars
+  geom_point(data = CaseMeans, aes(x = diagnosis, y = PSD95_density, shape=sex, size = 5), position = position_jitter(w = 0.1, h = 0.0)) + # Makes data points means of each case and makes the points offset in the x direction so they don't overlap and makes males circles and females triangles
+  ylim(0,1500000000) + #sets y axis limits
+  ylab("PSD95 density 
+(objects/mm3)")  + # sets the y-axis label
+  xlab("")  + # sets the x-axis label
+  theme_classic(base_size = 14) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("grey70","springgreen3")) # fills bars with colors I want
+pPSD_density + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x = element_blank())+theme(text = element_text(size=25)) 
+#labs(caption = "Linear Mixed effects model PSD95_density~diagnosis+sex+(1|BBN)+(1|PMI), 
+#    no significant effect of diagnosis or sex") 
+pPSD_density_panels <- pPSD_density + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x = element_blank())
+
+```
+
+### TMEM97 density
+```{r}
+
+#linear mixed effects model taking into account measurements came from within same case (BBN). ***NOTE FOR plaque distane measurements, use (1|BBN/Image_Name) to take into account that plaque distances were measured within the same image_at_death so nested within image_at_death then within case.****
+
+ME_TMEM97_density<- lmer(TMEM97_density~diagnosis+sex+(1|BBN)+(1|PMI),data = dataMCC)
+summary(ME_TMEM97_density)
+resid_panel(ME_TMEM97_density)
+# No effects of AD or sex
+
+pTMEM97_density <- ggplot(dataMCC, aes(x = diagnosis, y = TMEM97_density, fill = diagnosis)) +
+  stat_boxplot(geom ='errorbar', width = 0.2) +  #  adds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+#  stat_summary(fun.y = max, fun.ymax = length, geom = "text", aes(label = ..ymax..), vjust = -2)  + #adds group n's above bars
+  geom_point(data = CaseMeans, aes(x = diagnosis, y = TMEM97_density, shape=sex, size = 5), position = position_jitter(w = 0.1, h = 0.0)) + # Makes data points means of each case and makes the points offset in the x direction so they don't overlap and makes males circles and females triangles
+  #ylim(0,10000000000) + #sets y axis limits
+  ylab("TMEM97 density 
+(objects/mm3)")  + # sets the y-axis label
+  xlab("")  + # sets the x-axis label
+  theme_classic(base_size = 14) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("grey70","springgreen3")) # fills bars with colors I want
+pTMEM97_density + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x = element_blank())+theme(text = element_text(size=25))  
+  #+ labs(             
+  # caption = "Linear Mixed effects model TMEM97_density~diagnosis+sex+(1|BBN)+(1|PMI), 
+  #  no significant effect of diagnosis or sex") 
+pTMEM97_density_panels <- pTMEM97_density + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x = element_blank())
+
+```
+
+### Abeta density
+```{r}
+
+#linear mixed effects model taking into account measurements came from within same case (BBN). ***NOTE FOR plaque distane measurements, use (1|BBN/Image_Name) to take into account that plaque distances were measured within the same image_at_death so nested within image_at_death then within case.****
+
+dataMCC$Abeta_density_num <- as.numeric(dataMCC$Abeta_density)
+CaseMeans$Abeta_density_num <- as.numeric(CaseMeans$Abeta_density)
+#ME_Abeta_density<- lmer(Abeta_density_num~diagnosis+sex+(1|BBN)+(1|PMI),data = dataMCC)
+#summary(ME_Abeta_density)
+#resid_panel(ME_Abeta_density)
+# Note, did not work on original data so had to convert to numeric. residual panels look bad so try Tukey transform
+
+dataMCC$Abeta_density_num_Tukey <- transformTukey(dataMCC$Abeta_density_num)
+ME_Abeta_density_Tukey <- lmer(Abeta_density_num_Tukey~diagnosis+sex+(1|BBN)+(1|PMI),data = dataMCC)
+summary(ME_Abeta_density_Tukey)
+resid_panel(ME_Abeta_density_Tukey)
+#Tukey transformed data fit assumptions much better on resid panels. Significant increase in AD  p=0.02
+
+pAbeta_density <- ggplot(dataMCC, aes(x = diagnosis, y = Abeta_density_num, fill = diagnosis)) +
+  stat_boxplot(geom ='errorbar', width = 0.2) +  #  adds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+#  stat_summary(fun.y = max, fun.ymax = length, geom = "text", aes(label = ..ymax..), vjust = -2)  + #adds group n's above bars
+  geom_point(data = CaseMeans, aes(x = diagnosis, y = Abeta_density_num, shape=sex, size = 5), position = position_jitter(w = 0.1, h = 0.0)) + # Makes data points means of each case and makes the points offset in the x direction so they don't overlap and makes males circles and females triangles
+  #ylim(0,10000000000) + #sets y axis limits
+  ylab("Abeta density 
+(objects/mm3)")  + # sets the y-axis label
+  xlab("")  + # sets the x-axis label
+  theme_classic(base_size = 14) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("grey70","springgreen3")) # fills bars with colors I want
+pAbeta_density + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x = element_blank())+theme(text = element_text(size=25))    
+  #+ labs(             
+  # caption = "Linear Mixed effects model TMEM97_density~diagnosis+sex+(1|BBN)+(1|PMI), 
+  #  no significant effect of diagnosis or sex") 
+pAbeta_density_panels <- pAbeta_density + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x = element_blank())
+
+```
+
+
+ Put all 3 graphs above in panels for poster
+
+```{r}
+
+# generate Abeta graph
+pAbeta_density <- ggplot(dataMCC, aes(x = diagnosis, y = Abeta_density_num, fill = diagnosis)) +
+  stat_boxplot(geom ='errorbar', width = 0.2) +  #  adds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+#  stat_summary(fun.y = max, fun.ymax = length, geom = "text", aes(label = ..ymax..), vjust = -2)  + #adds group n's above bars
+  geom_point(data = CaseMeans, aes(x = diagnosis, y = Abeta_density_num, shape=sex), position = position_jitter(w = 0.1, h = 0.0)) + # Makes data points means of each case and makes the points offset in the x direction so they don't overlap and makes males circles and females triangles
+  #ylim(0,10000000000) + #sets y axis limits
+  ylab("Abeta density 
+(objects/mm3)")  + # sets the y-axis label
+  xlab("")  + # sets the x-axis label
+  theme_classic(base_size = 14) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("grey70","springgreen3")) # fills bars with colors I want
+
+pAbeta_density_panels <- pAbeta_density + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x = element_blank())
+
+
+#generate TMEM graph
+
+pTMEM97_density <- ggplot(dataMCC, aes(x = diagnosis, y = TMEM97_density, fill = diagnosis)) +
+  stat_boxplot(geom ='errorbar', width = 0.2) +  #  adds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+#  stat_summary(fun.y = max, fun.ymax = length, geom = "text", aes(label = ..ymax..), vjust = -2)  + #adds group n's above bars
+  geom_point(data = CaseMeans, aes(x = diagnosis, y = TMEM97_density, shape=sex), position = position_jitter(w = 0.1, h = 0.0)) + # Makes data points means of each case and makes the points offset in the x direction so they don't overlap and makes males circles and females triangles
+  #ylim(0,10000000000) + #sets y axis limits
+  ylab("TMEM97 density 
+(objects/mm3)")  + # sets the y-axis label
+  xlab("")  + # sets the x-axis label
+  theme_classic(base_size = 14) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("grey70","springgreen3")) # fills bars with colors I want
+pTMEM97_density_panels <- pTMEM97_density + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x = element_blank())
+
+# generate PSD graph
+pPSD_density <- ggplot(dataMCC, aes(x = diagnosis, y = PSD95_density, fill = diagnosis)) +
+  stat_boxplot(geom ='errorbar', width = 0.2) +  #  adds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+#  stat_summary(fun.y = max, fun.ymax = length, geom = "text", aes(label = ..ymax..), vjust = -2)  + #adds group n's above bars
+  geom_point(data = CaseMeans, aes(x = diagnosis, y = PSD95_density, shape=sex), position = position_jitter(w = 0.1, h = 0.0)) + # Makes data points means of each case and makes the points offset in the x direction so they don't overlap and makes males circles and females triangles
+  ylim(0,1500000000) + #sets y axis limits
+  ylab("PSD95 density 
+(objects/mm3)")  + # sets the y-axis label
+  xlab("")  + # sets the x-axis label
+  theme_classic(base_size = 14) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("grey70","springgreen3")) # fills bars with colors I want
+pPSD_density_panels <- pPSD_density + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x = element_blank())
+
+# wrap them together
+library("ggpubr")
+ggarrange(
+  pAbeta_density_panels, pTMEM97_density_panels, pPSD_density, labels = c("B", "C","D"),  ncol = 3, nrow = 1)
+
+```
+
+
+
+## Colocalization
+
+### PSD95 with TMEM97
+```{r}
+
+ME_PSD95_with_TMEM97<- lmer(PSD95_with_TMEM97~diagnosis+sex+(1|BBN)+(1|PMI),data = dataMCC)
+summary(ME_PSD95_with_TMEM97)
+resid_panel(ME_PSD95_with_TMEM97)
+
+# Significant increase in AD, no effect of sex
+#            Estimate Std. Error      df t value Pr(>|t|)   
+#(Intercept)   3.9117     0.8962 11.3848   4.365  0.00104 **
+#diagnosisAD   3.6506     0.8888  7.4870   4.107  0.00392 **
+#sexf          0.6829     0.8775  7.5585   0.778  0.46011  
+
+pPSD_with_TMEM <- ggplot(dataMCC, aes(x = diagnosis, y = PSD95_with_TMEM97, fill = diagnosis)) +
+  stat_boxplot(geom ='errorbar', width = 0.2) +  #  adds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+#  stat_summary(fun.y = max, fun.ymax = length, geom = "text", aes(label = ..ymax..), vjust = -2)  + #adds group n's above bars
+  geom_point(data = CaseMeans, aes(x = diagnosis, y = PSD95_with_TMEM97, shape=sex, size = 5), position = position_jitter(w = 0.1, h = 0.0)) + # Makes data points means of each case and makes the points offset in the x direction so they don't overlap and makes males circles and females triangles
+  ylim(0,15) + #sets y axis limits
+  ylab("% PSD95 with TMEM97")  + # sets the y-axis label
+  xlab("")  + # sets the x-axis label
+  theme_classic(base_size = 14) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("grey70","springgreen3")) # fills bars with colors I want
+pPSD_with_TMEM + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x = element_blank()) +theme(text = element_text(size=25))
+#+ labs(               
+#   caption = "Linear Mixed effects model (PSD95_with_TMEM97~diagnosis+sex+(1|BBN)+(1|PMI), 
+#   effect of diagosis beta=3.56, SE=0.89, t=4.11. p=00392*, no significant effect of sex") 
+pPSD_with_TMEM_panel <- pPSD_with_TMEM + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x = element_blank()) 
+
+
+
+```
+
+### PSD95 with Abeta
+
+```{r}
+
+ME_PSD95_with_Abeta <- lmer(PSD95_with_Abeta~diagnosis+sex+(1|BBN)+(1|PMI),data = dataMCC)
+summary(ME_PSD95_with_Abeta)
+resid_panel(ME_PSD95_with_Abeta)
+
+# trend to increase in AD, no effect of sex, residuals not perfect, perhaps shoud transform (or look at plaque distance)
+# Fixed effects:
+#            Estimate Std. Error      df t value Pr(>|t|)  
+#(Intercept)   0.6201     0.6943 11.4029   0.893   0.3903  
+#diagnosisAD   1.5727     0.7585 11.3106   2.073   0.0617 .
+#sexf          0.4321     0.7550 11.1567   0.572   0.5784  
+
+pPSD_with_abeta <- ggplot(dataMCC, aes(x = diagnosis, y = PSD95_with_Abeta, fill = diagnosis)) +
+  stat_boxplot(geom ='errorbar', width = 0.2) +  #  adds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+#  stat_summary(fun.y = max, fun.ymax = length, geom = "text", aes(label = ..ymax..), vjust = -2)  + #adds group n's above bars
+  geom_point(data = CaseMeans, aes(x = diagnosis, y = PSD95_with_Abeta, shape=sex, size = 5), position = position_jitter(w = 0.1, h = 0.0)) + # Makes data points means of each case and makes the points offset in the x direction so they don't overlap and makes males circles and females triangles
+  ylim(0,10) + #sets y axis limits
+  ylab("% PSD95 with Amyloid beta")  + # sets the y-axis label
+  xlab("")  + # sets the x-axis label
+  theme_classic(base_size = 20) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("grey70","springgreen3")) # fills bars with colors I want
+pPSD_with_abeta + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank())+theme(text = element_text(size=25))
+#+ labs(caption = "Linear Mixed effects model ***") 
+pPSD_with_abeta_panel <- pPSD_with_abeta + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank()) 
+
+```
+
+
+### PSD95 with TMEM97 and Abeta
+
+```{r}
+
+ME_PSD95_with_TMEM97_and_Abeta <- lmer(PSD95_with_TMEM97_and_Abeta~diagnosis+sex+(1|BBN)+(1|PMI),data = dataMCC)
+summary(ME_PSD95_with_TMEM97_and_Abeta)
+resid_panel(ME_PSD95_with_TMEM97_and_Abeta)
+
+# Significant increase in Ad, trend to sex effect with females slightly higher
+#            Estimate Std. Error       df t value Pr(>|t|)  
+#(Intercept) -0.01769    0.03936 12.86428  -0.449   0.6606  
+#diagnosisAD  0.11608    0.04296 12.75633   2.702   0.0184 *
+#sexf         0.07887    0.04269 12.57546   1.847   0.0883 .
+# Residual plots look good to me for most conditions so don't need to transform the data, they are normal enough I think
+
+pPSD95_with_TMEM97_and_Abeta <- ggplot(dataMCC, aes(x = diagnosis, y = PSD95_with_TMEM97_and_Abeta, fill = diagnosis)) +
+  stat_boxplot(geom ='errorbar', width = 0.2) +  #  adds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+#  stat_summary(fun.y = max, fun.ymax = length, geom = "text", aes(label = ..ymax..), vjust = -2)  + #adds group n's above bars
+  geom_point(data = CaseMeans, aes(x = diagnosis, y = PSD95_with_TMEM97_and_Abeta, shape=sex, size = 5), position = position_jitter(w = 0.1, h = 0.0)) + # Makes data points means of each case and makes the points offset in the x direction so they don't overlap and makes males circles and females triangles
+  ylim(0,1) + #sets y axis limits
+  ylab("% PSD95 with TMEM97 and Amyloid beta")  + # sets the y-axis label
+  xlab("")  + # sets the x-axis label
+  theme_classic(base_size = 20) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("grey70","springgreen3")) # fills bars with colors I want
+pPSD95_with_TMEM97_and_Abeta + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank())+theme(text = element_text(size=25))
+#+ labs(caption = "Linear Mixed effects model ***") 
+pPSD95_with_TMEM97_and_Abeta_panel <- pPSD95_with_TMEM97_and_Abeta + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank()) 
+
+```
+
+
+# AD cases APOE effect mixed models
+
+Within AD group, look for APOE effect, looks like no effect of APOE4
+
+```{r}
+
+# Make table of AD data only
+AD_data <- subset(dataMCC, dataMCC$diagnosis == "AD")
+AD_data %>%
+  group_by(BBN) %>%
+  summarize(APOE4_status=APOE4_status[1],
+            diagnosis=diagnosis[1],
+            sex=sex[1],
+            age_at_death=age_at_death[1],
+            PMI=PMI[1],
+            PSD95_density=mean(PSD95_density, na.rm=T),
+            TMEM97_density=mean(TMEM97_density, na.rm=T),
+            Abeta_density=mean(Abeta_density, na.rm=T),
+            PSD95_with_TMEM97=median(PSD95_with_TMEM97, na.rm=T),
+            PSD95_with_Abeta=median(PSD95_with_Abeta, na.rm=T),
+            PSD95_with_TMEM97_and_Abeta=median(PSD95_with_TMEM97_and_Abeta, na.rm=T)
+            ) -> AD_CaseMeans
+
+```
+
+
+## Densities
+
+### PSD95 density
+
+```{r}
+
+ME_PSD95_density_AD <- lmer(PSD95_density~APOE4_status+sex+(1|BBN)+(1|PMI),data = AD_data)
+summary(ME_PSD95_density_AD)
+resid_panel(ME_PSD95_density_AD)
+#No APOE effect on PSD density in AD
+
+pPSD95_density_AD <- ggplot(AD_data, aes(x = APOE4_status, y = PSD95_density, fill = APOE4_status)) +
+  stat_boxplot(geom ='errorbar', width = 0.2) +  #  adds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+#  stat_summary(fun.y = max, fun.ymax = length, geom = "text", aes(label = ..ymax..), vjust = -2)  + #adds group n's above bars
+  geom_point(data = AD_CaseMeans, aes(x = APOE4_status, y = PSD95_density, shape=sex), position = position_jitter(w = 0.1, h = 0.0)) + # Makes data points means of each case and makes the points offset in the x direction so they don't overlap and makes males circles and females triangles
+  ylim(0,1500000000) + #sets y axis limits
+  ylab("PSD95 density 
+(objects/mm3)")  + # sets the y-axis label
+  xlab("")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("springgreen3","springgreen4")) # fills bars with colors I want
+pPSD95_density_AD + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x = element_blank()) + labs(title = "Within AD cases, no effect of APOE4 allele",               
+   caption = "Linear Mixed effects model (PSD95_density~APOE4_status+sex+(1|BBN)+(1|PMI), 
+    no significant effect of APOE4 or sex") 
+
+pPSD95_density_AD_panel <- pPSD95_density_AD + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x = element_blank())
+
+```
+
+
+## Colocalization
+
+### PSD95 with TMEM97
+
+```{r}
+
+ME_PSD95_with_TMEM97_AD<- lmer(PSD95_with_TMEM97~APOE4_status+sex+(1|BBN)+(1|PMI),data = AD_data)
+summary(ME_PSD95_with_TMEM97_AD)
+resid_panel(ME_PSD95_with_TMEM97_AD)
+# QQ-plot of the residuals looks good to me, so don't need to transform the data, they are normal enough I think
+
+pPSD_with_TMEM_AD <- ggplot(AD_data, aes(x = APOE4_status, y = PSD95_with_TMEM97, fill = APOE4_status)) +
+  stat_boxplot(geom ='errorbar', width = 0.2) +  #  adds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+#  stat_summary(fun.y = max, fun.ymax = length, geom = "text", aes(label = ..ymax..), vjust = -2)  + #adds group n's above bars
+  geom_point(data = AD_CaseMeans, aes(x = APOE4_status, y = PSD95_with_TMEM97, shape=sex), position = position_jitter(w = 0.1, h = 0.0)) + # Makes data points means of each case and makes the points offset in the x direction so they don't overlap and makes males circles and females triangles
+  ylim(0,15) + #sets y axis limits
+  ylab("% PSD with TMEM97")  + # sets the y-axis label
+  xlab("")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("springgreen3","springgreen4")) # fills bars with colors I want
+pPSD_with_TMEM_AD + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x = element_blank()) + labs(title = "Within AD cases, no effect of APOE4 allele",               
+   caption = "Linear Mixed effects model (PSD95_with_TMEM97~APOE4_status+sex+(1|BBN)+(1|PMI), 
+    no significant effect of APOE4 or sex") 
+
+pPSD_with_TMEM_AD_panel <- pPSD_with_TMEM_AD + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x = element_blank())
+
+```
+
+
+### PSD95 with Abeta
+
+```{r}
+
+ME_PSD95_with_Abeta_AD <- lmer(PSD95_with_Abeta~APOE4_status+sex+(1|BBN)+(1|PMI),data = AD_data)
+summary(ME_PSD95_with_Abeta_AD)
+resid_panel(ME_PSD95_with_Abeta_AD)
+# Significant sex effect, higher in females *****
+
+pPSD_with_abeta_AD <- ggplot(AD_data, aes(x = APOE4_status, y = PSD95_with_Abeta, fill = APOE4_status)) +
+  stat_boxplot(geom ='errorbar', width = 0.2) +  #  adds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+#  stat_summary(fun.y = max, fun.ymax = length, geom = "text", aes(label = ..ymax..), vjust = -2)  + #adds group n's above bars
+  geom_point(data = AD_CaseMeans, aes(x = APOE4_status, y = PSD95_with_Abeta, shape=sex), position = position_jitter(w = 0.1, h = 0.0)) + # Makes data points means of each case and makes the points offset in the x direction so they don't overlap and makes males circles and females triangles
+  ylim(0,10) + #sets y axis limits
+  ylab("% PSD with Abeta")  + # sets the y-axis label
+  xlab("")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("springgreen3","springgreen4")) # fills bars with colors I want
+pPSD_with_abeta_AD + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank()) + labs(title = "Within AD cases, no effect of APOE4 allele", caption = "Linear Mixed effects model shows significant increases in % PSD with Abeta in females but no effect of APOE4") 
+pPSD_with_abeta_AD_panel <- pPSD_with_abeta_AD + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank()) 
+
+```
+
+
+### PSD95 with TMEM97 and Abeta
+
+```{r}
+
+ME_PSD95_with_TMEM97_and_Abeta_AD <- lmer(PSD95_with_TMEM97_and_Abeta~APOE4_status+sex+(1|BBN)+(1|PMI),data = AD_data)
+summary(ME_PSD95_with_TMEM97_and_Abeta_AD)
+resid_panel(ME_PSD95_with_TMEM97_and_Abeta_AD)
+
+# Significant sex effect, higher in females *****
+
+pPSD95_with_TMEM97_and_Abeta_AD <- ggplot(AD_data, aes(x = APOE4_status, y = PSD95_with_TMEM97_and_Abeta, fill = APOE4_status)) +
+  stat_boxplot(geom ='errorbar', width = 0.2) +  #  adds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+#  stat_summary(fun.y = max, fun.ymax = length, geom = "text", aes(label = ..ymax..), vjust = -2)  + #adds group n's above bars
+  geom_point(data = AD_CaseMeans, aes(x = APOE4_status, y = PSD95_with_TMEM97_and_Abeta, shape=sex), position = position_jitter(w = 0.1, h = 0.0)) + # Makes data points means of each case and makes the points offset in the x direction so they don't overlap and makes males circles and females triangles
+  ylim(0,1) + #sets y axis limits
+  ylab("% PSD with 
+TMEM97 and Abeta")  + # sets the y-axis label
+  xlab("")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("springgreen3","springgreen4")) # fills bars with colors I want
+pPSD95_with_TMEM97_and_Abeta_AD + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank()) + labs(title = "No effect of APOE4 within AD cases", caption = "Linear Mixed effects model shows significant increases in % PSD with Abeta and TMEM97 in females but no effect of APOE4") 
+pPSD95_with_TMEM97_and_Abeta_AD_panel <- pPSD95_with_TMEM97_and_Abeta_AD + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank()) 
+
+```
+
+
+
+
+
+# Plaque distance
+
+
+```{r}
+# Get subset of data from AD cases with distance from plaques since very few plaques present in controls
+
+AD <- subset(plaque_dist_data, plaque_dist_data$diagnosis == "AD")
+
+AD_data_mean_PSD <- ddply(AD_data, c("diagnosis"), summarise,
+               N    = length(PSD95_density),
+               mean = mean(PSD95_density, na.rm = TRUE),
+               sd   = sd(PSD95_density, na.rm = TRUE),
+               se   = sd / sqrt(N)
+)
+AD_data_mean_PSD
+
+control_data <- subset(dataMCC, dataMCC$diagnosis == "control")
+
+control_data_mean_PSD <- ddply(control_data, c("diagnosis"), summarise,
+               N    = length(PSD95_density),
+               mean = mean(PSD95_density, na.rm = TRUE),
+               sd   = sd(PSD95_density, na.rm = TRUE),
+               se   = sd / sqrt(N)
+)
+control_data_mean_PSD
+
+```
+
+
+## PSD95 density
+
+```{r}
+
+ME_plaque_dist_AD_PSD<- lmer(PSD95_density~plaque_distance_factor+APOE4_status+sex+(1|BBN/Image_name)+(1|PMI),data = AD)
+summary(ME_plaque_dist_AD_PSD)
+resid_panel(ME_plaque_dist_AD_PSD)
+
+# Q-Q plot looks good, significant effect of plaque distance no effect APOE or sex.
+
+#AD$PSD95_density_Tukey <- transformTukey(AD$PSD95_density)
+#ME_plaque_dist_AD_PSD_TK<- lmer(PSD95_density_Tukey~plaque_distance+APOE4_status+sex+(1|BBN/Image_name)+(1|PMI),data = AD)
+#summary(ME_plaque_dist_AD_PSD_TK)
+#resid_panel(ME_plaque_dist_AD_PSD_TK)
+# Model shows no effect of plaque distance or APOE4 status, not sure whether to include APOE status as only 3 E3 cases
+
+
+
+# Create line plot only AD cases as there are few plaques in controls
+
+
+
+
+plaque_dist_AD_PSD <- ddply(AD, c("plaque_distance"), summarise,
+               N    = length(PSD95_density),
+               mean = mean(PSD95_density, na.rm = TRUE),
+               sd   = sd(PSD95_density, na.rm = TRUE),
+               se   = sd / sqrt(N)
+)
+plaque_dist_AD_PSD
+
+
+
+pplaque_dist_AD_PSD <- ggplot(plaque_dist_AD_PSD, aes(x = plaque_distance, y = mean)) +
+  geom_point() + 
+  ylim(0,1500000000) + #sets y axis limits
+  ylab("PSD density (PSD/mm3)")  + # sets the y-axis label
+  xlab("distance from plaque (microns)")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+#  theme(legend.position="none") +  #removes legend since labels on x axis sufficient
+   scale_colour_manual(values=c("springgreen3"))  #makes outlines and dots green
+  
+pplaque_dist_AD_PSD + geom_line()  + geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=.3)  + geom_hline(data = control_data_mean_PSD, aes(yintercept=mean), linetype="dashed", color = "grey", size=0.5) + geom_hline(data = AD_data_mean_PSD, aes(yintercept=mean), linetype="dashed",  color = "springgreen3", size=0.5)
+
+#pplaque_dist_AD_PSD_panel <- pplaque_dist_AD_PSD + geom_line()  + geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=.3)  + geom_hline(data = control_data_mean_PSD, aes(yintercept=mean), linetype="dashed", color = "grey", size=0.5) 
+
+# grey dotted is control mean, green dotted line is AD mean - seems to be something odd about the PSD densities that came out of the plaque distance script? *** Checking with Marti.
+
+# Get subset of data from AD cases with distance from plaques since very few plaques present in controls
+
+AD <- subset(plaque_dist_data, plaque_dist_data$diagnosis == "AD")
+
+
+AD_data_mean <- ddply(AD, c("diagnosis"), summarise,
+               N    = length(PSD95_with_TMEM97),
+               mean = mean(PSD95_with_TMEM97, na.rm = TRUE),
+               sd   = sd(PSD95_with_TMEM97, na.rm = TRUE),
+               se   = sd / sqrt(N)
+)
+AD_data_mean
+
+control_data <- subset(dataMCC, dataMCC$diagnosis == "control")
+
+control_data_mean <- ddply(control_data, c("diagnosis"), summarise,
+               N    = length(PSD95_with_TMEM97),
+               mean = mean(PSD95_with_TMEM97, na.rm = TRUE),
+               sd   = sd(PSD95_with_TMEM97, na.rm = TRUE),
+               se   = sd / sqrt(N)
+)
+control_data_mean
+
+
+
+# Create line plot only AD cases as there are few plaques in controls
+
+
+
+
+plaque_dist_AD_PSD_TMEM <- ddply(AD, c("plaque_distance"), summarise,
+               N    = length(PSD95_with_TMEM97),
+               mean = mean(PSD95_with_TMEM97, na.rm = TRUE),
+               sd   = sd(PSD95_with_TMEM97, na.rm = TRUE),
+               se   = sd / sqrt(N)
+)
+plaque_dist_AD_PSD_TMEM
+
+
+
+pplaque_dist_AD_PSD_TMEM <- ggplot(plaque_dist_AD_PSD_TMEM, aes(x = plaque_distance, y = mean)) +
+  geom_point() + 
+  ylim(0,15) + #sets y axis limits
+  ylab("% PSD with TMEM97")  + # sets the y-axis label
+  xlab("distance from plaque (microns)")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+#  theme(legend.position="none") +  #removes legend since labels on x axis sufficient
+   scale_colour_manual(values=c("springgreen3"))  #makes outlines and dots green
+  
+pplaque_dist_AD_PSD_TMEM + geom_line()  + geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=.3)  + geom_hline(data = control_data_mean, aes(yintercept=mean), linetype="dashed", 
+                color = "grey", size=0.5) + geom_hline(data = AD_data_mean, aes(yintercept=mean), linetype="dashed", 
+                color = "springgreen3", size=0.5)
+
+pplaque_dist_AD_PSD_TMEM_panel <- pplaque_dist_AD_PSD_TMEM + geom_line()  + geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=.3)  + geom_hline(data = control_data_mean, aes(yintercept=mean), linetype="dashed", 
+                color = "grey", size=0.5) 
+
+# grey dotted is control mean, green dotted line is AD mean
+
+ME_pplaque_dist_AD_PSD_TMEM <- lmer(PSD95_with_TMEM97~plaque_distance_factor+APOE4_status+sex+(1|BBN/Image_name)+(1|PMI),data = AD)
+summary(ME_pplaque_dist_AD_PSD_TMEM)
+resid_panel(ME_pplaque_dist_AD_PSD_TMEM)
+
+# Note there is an effect of plaque distance and a trend toward APOE effect
+
+
+AD_data_mean_PSD_with_Abeta <- ddply(AD, c("diagnosis"), summarise,
+               N    = length(PSD95_with_Abeta),
+               mean = mean(PSD95_with_Abeta, na.rm = TRUE),
+               sd   = sd(PSD95_with_Abeta, na.rm = TRUE),
+               se   = sd / sqrt(N)
+)
+AD_data_mean_PSD_with_Abeta
+
+
+control_data_mean_PSD_with_Abeta <- ddply(control_data, c("diagnosis"), summarise,
+               N    = length(PSD95_with_Abeta),
+               mean = mean(PSD95_with_Abeta, na.rm = TRUE),
+               sd   = sd(PSD95_with_Abeta, na.rm = TRUE),
+               se   = sd / sqrt(N)
+)
+control_data_mean_PSD_with_Abeta
+
+
+
+# Create line plot only AD cases as there are few plaques in controls
+
+
+
+
+plaque_dist_AD_PSD_with_Abeta <- ddply(AD, c("plaque_distance"), summarise,
+               N    = length(PSD95_with_Abeta),
+               mean = mean(PSD95_with_Abeta, na.rm = TRUE),
+               sd   = sd(PSD95_with_Abeta, na.rm = TRUE),
+               se   = sd / sqrt(N)
+)
+plaque_dist_AD_PSD_with_Abeta
+
+
+
+pplaque_dist_AD_PSD_Abeta <- ggplot(plaque_dist_AD_PSD_with_Abeta, aes(x = plaque_distance, y = mean)) +
+  geom_point() + 
+  ylim(0,25) + #sets y axis limits
+  ylab("% PSD with Abeta")  + # sets the y-axis label
+  xlab("distance from plaque (microns)")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+#  theme(legend.position="none") +  #removes legend since labels on x axis sufficient
+   scale_colour_manual(values=c("springgreen3"))  #makes outlines and dots green
+  
+pplaque_dist_AD_PSD_Abeta + geom_line()  + geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=.3)  + geom_hline(data = control_data_mean_PSD_with_Abeta, aes(yintercept=mean), linetype="dashed", 
+                color = "grey", size=0.5) + geom_hline(data = AD_data_mean_PSD_with_Abeta, aes(yintercept=mean), linetype="dashed", color = "springgreen3", size=0.5)
+# grey dotted is control mean, green dotted line is AD mean
+
+pplaque_dist_AD_PSD_Abeta_panel <- pplaque_dist_AD_PSD_Abeta + geom_line()  + geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=.3)  + geom_hline(data = control_data_mean_PSD_with_Abeta, aes(yintercept=mean), linetype="dashed", 
+                color = "grey", size=0.5) 
+
+
+ME_pplaque_dist_AD_PSD_with_Abeta <- lmer(PSD95_with_Abeta~plaque_distance_factor+APOE4_status+sex+(1|BBN/Image_name)+(1|PMI),data = AD)
+summary(ME_pplaque_dist_AD_PSD_with_Abeta)
+resid_panel(ME_pplaque_dist_AD_PSD_with_Abeta)
+# very significant plaque distance effect and also effect of sex with f more abeta than m
+
+
+AD_data_mean_PSD_with_TMEM_and_Abeta <- ddply(AD, c("diagnosis"), summarise,
+               N    = length(PSD95_with_TMEM97_and_Abeta),
+               mean = mean(PSD95_with_TMEM97_and_Abeta, na.rm = TRUE),
+               sd   = sd(PSD95_with_TMEM97_and_Abeta, na.rm = TRUE),
+               se   = sd / sqrt(N)
+)
+AD_data_mean_PSD_with_TMEM_and_Abeta
+
+
+control_data_mean_PSD_with_TMEM_and_Abeta <- ddply(control_data, c("diagnosis"), summarise,
+               N    = length(PSD95_with_TMEM97_and_Abeta),
+               mean = mean(PSD95_with_TMEM97_and_Abeta, na.rm = TRUE),
+               sd   = sd(PSD95_with_TMEM97_and_Abeta, na.rm = TRUE),
+               se   = sd / sqrt(N)
+)
+control_data_mean_PSD_with_TMEM_and_Abeta
+
+
+
+# Create line plot only AD cases as there are few plaques in controls
+
+plaque_dist_AD_PSD_with_TMEM_and_Abeta <- ddply(AD, c("plaque_distance"), summarise,
+               N    = length(PSD95_with_TMEM97_and_Abeta),
+               mean = mean(PSD95_with_TMEM97_and_Abeta, na.rm = TRUE),
+               sd   = sd(PSD95_with_TMEM97_and_Abeta, na.rm = TRUE),
+               se   = sd / sqrt(N)
+)
+plaque_dist_AD_PSD_with_TMEM_and_Abeta
+
+
+
+pplaque_dist_AD_PSD_TMEM_and_Abeta <- ggplot(plaque_dist_AD_PSD_with_TMEM_and_Abeta, aes(x = plaque_distance, y = mean)) +
+  geom_point() + 
+  ylim(0,1.2) + #sets y axis limits
+  ylab("% PSD with TMEM97+Abeta")  + # sets the y-axis label
+  xlab("distance from plaque (microns)")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+#  theme(legend.position="none") +  #removes legend since labels on x axis sufficient
+   scale_colour_manual(values=c("springgreen3"))  #makes outlines and dots green
+  
+pplaque_dist_AD_PSD_TMEM_and_Abeta + geom_line()  + geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=.3)  + geom_hline(data = control_data_mean_PSD_with_TMEM_and_Abeta, aes(yintercept=mean), linetype="dashed", 
+                color = "grey", size=0.5) + geom_hline(data = AD_data_mean_PSD_with_TMEM_and_Abeta, aes(yintercept=mean), linetype="dashed", color = "springgreen3", size=0.5)
+# grey dotted is control mean, green dotted line is AD mean
+
+pplaque_dist_AD_PSD_TMEM_and_Abeta_panel <- pplaque_dist_AD_PSD_TMEM_and_Abeta + geom_line()  + geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=.3)  + geom_hline(data = control_data_mean_PSD_with_TMEM_and_Abeta, aes(yintercept=mean), linetype="dashed", 
+                color = "grey", size=0.5) 
+
+
+ME_plaque_dist_AD_PSD_TMEM_and_Abeta <- lmer(PSD95_with_TMEM97_and_Abeta~plaque_distance_factor+APOE4_status+sex+(1|BBN/Image_name)+(1|PMI),data = AD)
+summary(ME_plaque_dist_AD_PSD_TMEM_and_Abeta)
+resid_panel(ME_plaque_dist_AD_PSD_TMEM_and_Abeta)
+# very significant plaque distance effect and also effect of sex with f more abeta than m
+
+#plot_grid(pplaque_dist_AD_PSD_panel, pplaque_dist_AD_PSD_TMEM_panel, pplaque_dist_AD_PSD_Abeta_panel, pplaque_dist_AD_PSD_TMEM_and_Abeta_panel, label_size = 11, labels = "AUTO")
+
+
+
+
+```
+
+
+# Correlations
+
+```{r}
+
+# Get subset of data from CT1812 cases for correlations with drug concentration
+
+Treated_data<- subset(CaseMeans, CaseMeans$diagnosis == "AD")
+To_Correlate<- Treated_data[, c("PSD95_density", "TMEM97_density", "Abeta_density","PSD95_with_TMEM97", "PSD95_with_Abeta","PSD95_with_TMEM97_and_Abeta")]
+
+
+rquery.cormat(To_Correlate)
+
+cormat<-rquery.cormat(To_Correlate, graphType="heatmap")
+
+rquery.cormat(To_Correlate, type="flatten", graph=FALSE)
+
+
+
+
+
+```
+
+
+
+

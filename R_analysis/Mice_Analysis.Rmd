@@ -1,0 +1,1048 @@
+---
+title: "Mice analysis"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_float: 
+      collapsed: false
+    theme: cerulean
+---
+
+
+
+
+# Loaded data
+
+load libraries, Set WD and import the data.
+```{r}
+
+library(readr)
+library(plyr)
+library(forcats)
+library(lme4)
+library(ggplot2)
+library(stargazer)
+library(lmerTest)
+library(rcompanion)
+library(dplyr)
+library(tidyverse)
+library(emmeans)
+library(reshape2)
+library(tidyr)
+library(qwraps2)
+library(arsenal)
+library(table1)
+library(plotrix)
+library(ggResidpanel)
+
+#install.packages("corrplot")
+source("http://www.sthda.com/upload/rquery_cormat.r")
+
+
+#install.packages("GGally")
+library(GGally)
+
+setwd("D:/TMEM97_Study/R_Analysis/R_Analysis_TMEM97/Mice/")
+
+
+dataMice <- read_csv2("Mice_samples_with_Results_All.csv", col_types = cols (
+  Case = 'f',
+  Image_name = 'f',
+  treatment = 'f',
+  sex = 'f',
+  Plaque_type = 'f',
+  block = 'f'
+  
+))
+
+
+```
+
+For the first variable of interest (% PSD with TMEM97), visualize the data in box plot. Males = circles, females = triangles
+
+
+
+
+# Summary tables
+
+```{r}
+
+# First, will  the data - assign levels to compare everything to vehicle
+
+dataMice$treatment <- relevel(dataMice$treatment, ref = "vehicle")
+
+dataMice$sex <- relevel(dataMice$sex, ref = "f")
+
+#Create new dataframe with means per case for plotting use na.rm=T to ignore empty cells that are automatically filled with NA
+
+dataMice %>%
+  group_by(Case) %>%
+  summarize(treatment=treatment[1],
+            sex=sex[1],
+            age_at_death=Age_at_death[1],
+            PSD95_density=mean(PSD95_density, na.rm=T),
+            TMEM97_density=mean(TMEM97_density, na.rm=T),
+            Abeta_density=mean(Abeta_density, na.rm=T),
+            PSD95_with_TMEM97=median(PSD95_with_TMEM97, na.rm=T),
+            PSD95_with_Abeta=median(PSD95_with_Abeta, na.rm=T),
+            PSD95_with_TMEM97_and_Abeta=median(PSD95_with_TMEM97_and_Abeta, na.rm=T),
+            Fret_Positive=mean(Fret_Positive, na.rm=T),
+            brain_CT1812=mean(brain_CT1812, na.rm=T),
+            RO=mean(RO, na.rm=T),
+            nM=mean(nM, na.rm=T),
+            ) -> CaseMeans
+
+
+
+# Create a summary table of demographics of cases in AT study
+
+
+
+table1::label(CaseMeans$sex) <- "Sex"
+table1::label(CaseMeans$age_at_death) <- "Age at death (m)"
+table1::label(CaseMeans$brain_CT1812) <- "Brain CT1812 (ng/mL)"
+table1::label(CaseMeans$nM) <- "Brain CT1812 (nM)"
+table1::label(CaseMeans$RO) <- "Receptor occupacy (%)"
+
+table1::table1(~ sex + age_at_death + brain_CT1812 + nM + RO | treatment, data = CaseMeans)
+
+
+
+
+
+```
+```{r}
+
+# Create a summary table of results of AT study
+
+
+table1::label(CaseMeans$PSD95_density) <- "PSD95 density (PSD95/mm3)"
+table1::label(dataMice$TMEM97_density) <- "TMEM97 density (TMEM97/mm3)"
+table1::label(dataMice$Abeta_density) <- "Abeta density (Abeta/mm3)"
+table1::label(dataMice$PSD95_with_TMEM97) <- "% PSDs with TMEM97"
+table1::label(dataMice$PSD95_with_Abeta) <- "% PSDs with Abeta"
+table1::label(dataMice$PSD95_with_TMEM97_and_Abeta) <- "% PSDs with TMEM97 and Abeta"
+table1::label(dataMice$Fret_Positive) <- "% Fret_Positive"
+table1::label(dataMice$brain_CT1812) <- "Brain CT1812 (ng/mL)"
+table1::label(dataMice$RO) <- "% RO"
+
+table1::table1(~ PSD95_density + TMEM97_density + Abeta_density + PSD95_with_TMEM97 + PSD95_with_Abeta +PSD95_with_TMEM97_and_Abeta + Fret_Positive | treatment, data = CaseMeans)
+
+
+
+```
+
+
+
+
+
+# Mixed models whole image
+
+### PSD95 density
+
+```{r}
+
+
+Treated_cases<- subset(dataMice, dataMice$treatment == "CT1812")
+Treated_cases_means<- subset(CaseMeans, CaseMeans$treatment == "CT1812")
+
+Treated_cases_means_males<- subset(Treated_cases_means, Treated_cases_means$sex == "m")
+Treated_cases_means_females<- subset(Treated_cases_means, Treated_cases_means$sex == "f")
+
+mean(Treated_cases_means_males$RO)
+sd(Treated_cases_means_males$RO)
+mean(Treated_cases_means_females$RO)
+sd(Treated_cases_means_females$RO)
+
+
+
+ME_donor<- lmer(RO~sex+(1|Case),data = Treated_cases)
+summary(ME_donor)
+resid_panel(ME_donor)
+# No effects of CT1812-16 or sex
+
+
+# Create boxplot
+pacceptor <- ggplot(Treated_cases, aes(x = sex, y = RO, fill = sex)) +
+  stat_boxplot(geom ='errorbar', width = 0.2) +  #  adds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+#  stat_summary(fun.y = max, fun.ymax = length, geom = "text", aes(label = ..ymax..), vjust = -2)  + #adds group n's above bars
+  geom_point(data = Treated_cases_means, aes(x = sex, y = RO, shape=sex, size=5), position = position_jitter(w = 0.1, h = 0.0)) + # Makes data points means of each case and makes the points offset in the x direction so they don't overlap and makes males circles and females triangles
+  scale_shape_manual(values = c(17, 16))+
+  ylim(0,100) + #sets y axis limits
+  ylab("Receptor occupancy (%)")  + # sets the y-axis label
+  xlab("")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("grey70","springgreen3")) # fills bars with colors I want
+pacceptor + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x = element_blank()) + theme(text = element_text(size=25))
+
+ME_RO <- lmer(RO~treatment*sex+(1|Case),data = dataMice)
+summary(ME_RO)
+resid_panel(ME_RO)
+# No effects of CT1812-16 or sex 
+
+anova (ME_RO)
+#emmeans(ME_RO, pairwise ~ treatment, adjust="tukey")
+
+pRO <- ggplot(dataMice, aes(x = treatment, y = RO, fill = sex)) +
+
+  stat_boxplot(geom ='errorbar', width = 0.2,position = position_dodge(0.75)) +  #  CT1812ds the little horizontal lines on top and bottom of whiskers
+  
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+
+  geom_point(data = CaseMeans, aes(x = treatment, y = RO, colour=sex, shape=sex), size=5, position=position_jitterdodge(jitter.width = 0.2, jitter.height = 0))+ 
+  scale_shape_manual(values = c(17, 16))+
+ 
+   ylim(0,100) + #sets y axis limits
+  ylab("% receptor occupancy")  + # sets the y-axis label
+  xlab("")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("grey70","springgreen3")) # fills bars with colors I want
+pRO + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank())  +theme(text = element_text(size=25))
+pRO_panel <- pRO + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank()) 
+
+
+
+
+
+```
+## Densities
+
+
+### PSD95 density
+
+```{r}
+
+#linear mixed effects model taking into account measurements came from within same case (Case). ***NOTE FOR plaque distane measurements, use (1|Case/Image_Name) to take into account that plaque distances were measured within the same image_at_death so nested within image_at_death then within case.****
+
+ME_PSD95_density<- lmer(PSD95_density~treatment*sex+(1|Case),data = dataMice)
+summary(ME_PSD95_density)
+resid_panel(ME_PSD95_density)
+# No effects of CT1812-16 or sex
+
+# Create boxplot
+pPSD_density <- ggplot(dataMice, aes(x = treatment, y = PSD95_density, fill = treatment)) +
+  stat_boxplot(geom ='errorbar', width = 0.2) +  #  adds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+#  stat_summary(fun.y = max, fun.ymax = length, geom = "text", aes(label = ..ymax..), vjust = -2)  + #adds group n's above bars
+  geom_point(data = CaseMeans, aes(x = treatment, y = PSD95_density, shape=sex,size=5), position = position_jitter(w = 0.1, h = 0.0)) + # Makes data points means of each case and makes the points offset in the x direction so they don't overlap and makes males circles and females triangles
+    scale_shape_manual(values = c(24, 21))+
+  ylim(0,1500000000) + #sets y axis limits
+  ylab("PSD95 density (objects/mm3)")  + # sets the y-axis label
+  xlab("")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("grey70","springgreen3")) # fills bars with colors I want
+pPSD_density + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x = element_blank()) + theme(text = element_text(size=25))
+pPSD_density_panels <- pPSD_density + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x = element_blank())
+
+
+
+```
+
+
+
+
+### TMEM97 density
+
+```{r}
+
+#linear mixed effects model taking into account measurements came from within same case (Case). ***NOTE FOR plaque distane measurements, use (1|Case/Image_Name) to take into account that plaque distances were measured within the same image_at_death so nested within image_at_death then within case.****
+
+ME_TMEM97_density<- lmer(TMEM97_density~treatment*sex+(1|Case),data = dataMice)
+summary(ME_TMEM97_density)
+resid_panel(ME_TMEM97_density)
+# No effects of CT1812-16 or sex
+
+# Create boxplot
+pTMEM97_density <- ggplot(dataMice, aes(x = treatment, y = TMEM97_density, fill = treatment)) +
+  stat_boxplot(geom ='errorbar', width = 0.2) +  #  adds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+#  stat_summary(fun.y = max, fun.ymax = length, geom = "text", aes(label = ..ymax..), vjust = -2)  + #adds group n's above bars
+  geom_point(data = CaseMeans, aes(x = treatment, y = TMEM97_density, shape=sex, size=5), position = position_jitter(w = 0.1, h = 0.0)) + # Makes data points means of each case and makes the points offset in the x direction so they don't overlap and makes males circles and females triangles
+    scale_shape_manual(values = c(17, 16))+
+  ylim(0,1500000000) + #sets y axis limits
+  ylab("TMEM97 density (objects/mm3)")  + # sets the y-axis label
+  xlab("")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("grey70","springgreen3")) # fills bars with colors I want
+pTMEM97_density + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x = element_blank())+ theme(text = element_text(size=25))
+pTMEM97_density_panels <- pTMEM97_density + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x = element_blank())
+
+```
+
+
+
+
+### Abeta density
+
+
+```{r}
+
+#linear mixed effects model taking into account measurements came from within same case (Case). ***NOTE FOR plaque distane measurements, use (1|Case/Image_Name) to take into account that plaque distances were measured within the same image_at_death so nested within image_at_death then within case.****
+
+ME_Abeta_density<- lmer(Abeta_density~treatment*sex+(1|Case),data = dataMice)
+summary(ME_Abeta_density)
+resid_panel(ME_Abeta_density)
+# No effects of CT1812-16 or sex
+
+# Create boxplot
+pAbeta_density <- ggplot(dataMice, aes(x = treatment, y = Abeta_density, fill = treatment)) +
+  stat_boxplot(geom ='errorbar', width = 0.2) +  #  adds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+#  stat_summary(fun.y = max, fun.ymax = length, geom = "text", aes(label = ..ymax..), vjust = -2)  + #adds group n's above bars
+  geom_point(data = CaseMeans, aes(x = treatment, y = Abeta_density, shape=sex, size=5), position = position_jitter(w = 0.1, h = 0.0)) + # Makes data points means of each case and makes the points offset in the x direction so they don't overlap and makes males circles and females triangles
+    scale_shape_manual(values = c(17, 16))+
+  ylim(0,100000000) + #sets y axis limits
+  ylab("Abeta density (objects/mm3)")  + # sets the y-axis label
+  xlab("")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("grey70","springgreen3")) # fills bars with colors I want
+pAbeta_density + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x = element_blank()) + theme(text = element_text(size=25))
+pAbeta_density_panels <- pAbeta_density + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x = element_blank())
+
+```
+
+
+
+## Colocalization
+
+
+### PSD95 with TMEM97
+
+```{r}
+
+ME_PSD95_with_TMEM97<- lmer(PSD95_with_TMEM97~treatment*sex+(1|Case),data = dataMice)
+summary(ME_PSD95_with_TMEM97)
+resid_panel(ME_PSD95_with_TMEM97)
+# No effects of CT1812-16 or sex 
+
+pPSD_with_TMEM <- ggplot(dataMice, aes(x = treatment, y = PSD95_with_TMEM97, fill = treatment)) +
+  stat_boxplot(geom ='errorbar', width = 0.2) +  #  CT1812ds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+#  stat_summary(fun.y = max, fun.ymax = length, geom = "text", aes(label = ..ymax..), vjust = -2)  + #CT1812ds group n's above bars
+  geom_point(data = CaseMeans, aes(x = treatment, y = PSD95_with_TMEM97, shape=sex, size=5), position = position_jitter(w = 0.1, h = 0.0)) + # Makes data points means of each case and makes the points offset in the x direction so they don't overlap and makes males circles and females triangles
+    scale_shape_manual(values = c(17, 16))+
+  ylim(0,20) + #sets y axis limits
+  ylab("% PSD95 with TMEM97")  + # sets the y-axis label
+  xlab("")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("grey70","springgreen3")) # fills bars with colors I want
+pPSD_with_TMEM + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x = element_blank())  + theme(text = element_text(size=25))
+pPSD_with_TMEM_panel <- pPSD_with_TMEM + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x = element_blank()) 
+
+```
+
+
+
+
+### PSD95 with Abeta
+
+```{r}
+
+ME_PSD95_with_Abeta <- lmer(PSD95_with_Abeta~treatment*sex+(1|Case),data = dataMice)
+summary(ME_PSD95_with_Abeta)
+resid_panel(ME_PSD95_with_Abeta)
+# No effects of CT1812-16 or sex 
+
+pPSD_with_abeta <- ggplot(dataMice, aes(x = treatment, y = PSD95_with_Abeta, fill = treatment)) +
+  stat_boxplot(geom ='errorbar', width = 0.2) +  #  CT1812ds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+#  stat_summary(fun.y = max, fun.ymax = length, geom = "text", aes(label = ..ymax..), vjust = -2)  + #CT1812ds group n's above bars
+  geom_point(data = CaseMeans, aes(x = treatment, y = PSD95_with_Abeta, shape=sex,size=5), position = position_jitter(w = 0.1, h = 0.0)) + # Makes data points means of each case and makes the points offset in the x direction so they don't overlap and makes males circles and females triangles
+    scale_shape_manual(values = c(17, 16))+
+  ylim(0,6) + #sets y axis limits
+  ylab("% PSD95 with Abeta")  + # sets the y-axis label
+  xlab("")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("grey70","springgreen3")) # fills bars with colors I want
+pPSD_with_abeta + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank())  + theme(text = element_text(size=25))
+pPSD_with_abeta_panel <- pPSD_with_abeta + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank()) 
+
+ME_PSD95_with_Abeta_Tukey <- transformTukey(dataMice$PSD95_with_Abeta)
+ME_PSD95_with_Abeta_TK <- lmer(ME_PSD95_with_Abeta_Tukey~treatment*sex+(1|Case),data = dataMice)
+summary(ME_PSD95_with_Abeta_TK)
+resid_panel(ME_PSD95_with_Abeta_TK)
+# No effects of CT1812-16 or sex
+
+```
+
+
+
+### PSD95 with TMEM97 and Abeta
+
+
+
+```{r}
+
+ME_PSD95_with_TMEM97_and_Abeta <- lmer(PSD95_with_TMEM97_and_Abeta~treatment*sex+(1|Case),data = dataMice)
+summary(ME_PSD95_with_TMEM97_and_Abeta)
+resid_panel(ME_PSD95_with_TMEM97_and_Abeta)
+# No effects of CT1812-16 or sex 
+
+pPSD95_with_TMEM97_and_Abeta <- ggplot(dataMice, aes(x = treatment, y = PSD95_with_TMEM97_and_Abeta, fill = treatment)) +
+  stat_boxplot(geom ='errorbar', width = 0.2) +  #  CT1812ds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+#  stat_summary(fun.y = max, fun.ymax = length, geom = "text", aes(label = ..ymax..), vjust = -2)  + #CT1812ds group n's above bars
+  geom_point(data = CaseMeans, aes(x = treatment, y = PSD95_with_TMEM97_and_Abeta, shape=sex,size=5), position = position_jitter(w = 0.1, h = 0.0)) + # Makes data points means of each case and makes the points offset in the x direction so they don't overlap and makes males circles and females triangles
+    scale_shape_manual(values = c(17, 16))+
+  ylim(0,0.6) + #sets y axis limits
+  ylab("% PSD95 with TMEM97 and Abeta")  + # sets the y-axis label
+  xlab("")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("grey70","springgreen3")) # fills bars with colors I want
+pPSD95_with_TMEM97_and_Abeta + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank()) + theme(text = element_text(size=25))
+pPSD95_with_TMEM97_and_Abeta_panel <- pPSD95_with_TMEM97_and_Abeta + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank()) 
+
+ME_PSD95_with_TMEM97_and_Abeta_Tukey <- transformTukey(dataMice$PSD95_with_TMEM97_and_Abeta)
+ME_PSD95_with_TMEM97_and_Abeta_TK <- lmer(ME_PSD95_with_TMEM97_and_Abeta_Tukey~treatment*sex+(1|Case),data = dataMice)
+summary(ME_PSD95_with_TMEM97_and_Abeta_TK)
+resid_panel(ME_PSD95_with_TMEM97_and_Abeta_TK)
+# No effects of CT1812-16 or sex
+
+
+```
+
+
+## FRET
+
+```{r}
+
+
+ME_Fret_Positive <- lmer(Fret_Positive~treatment*sex+(1|Case),data = dataMice)
+summary(ME_Fret_Positive)
+resid_panel(ME_Fret_Positive)
+# No effects of CT1812-16 or sex 
+
+anova (ME_Fret_Positive)
+emmeans(ME_Fret_Positive, pairwise ~ treatment*sex, adjust="tukey")
+
+pFret_Positive <- ggplot(dataMice, aes(x = treatment, y = Fret_Positive, fill = sex)) +
+  annotate(geom = "rect", xmin = -Inf, xmax = Inf,ymin = 83.35, ymax = 2.23, fill = "darkseagreen2", alpha = 0.6) +
+  
+  stat_boxplot(geom ='errorbar', width = 0.2,position = position_dodge(0.75)) +  #  CT1812ds the little horizontal lines on top and bottom of whiskers
+  
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+
+  geom_point(data = CaseMeans, aes(x = treatment, y = Fret_Positive, colour=sex, shape=sex), size=5, position=position_jitterdodge(jitter.width = 0.2, jitter.height = 0))+ 
+  scale_shape_manual(values = c(17, 16))+
+ 
+   ylim(0,100) + #sets y axis limits
+  ylab("% synaptic FRET (px)")  + # sets the y-axis label
+  xlab("")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("grey70","springgreen3")) # fills bars with colors I want
+pFret_Positive + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank())  +theme(text = element_text(size=25))
+pFret_Positive_panel <- pFret_Positive + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank()) 
+
+
+ME_Fret_Positive_Tukey <- transformTukey(dataMice$Fret_Positive)
+ME_Fret_Positive_TK <- lmer(ME_Fret_Positive_Tukey~treatment*sex+(1|Case),data = dataMice)
+summary(ME_Fret_Positive_TK)
+resid_panel(ME_Fret_Positive_TK)
+
+
+
+```
+
+
+
+
+
+# Mixed models by plaque distance (10um)
+
+
+## Densities
+
+
+### PSD95 density
+
+```{r}
+
+ME_PSD95_den_10<- lmer(PSD95_den_10~treatment*sex+(1|Case),data = dataMice)
+summary(ME_PSD95_den_10)
+resid_panel(ME_PSD95_den_10)
+# No effects of CT1812-16 or sex
+
+```
+
+
+
+
+### TMEM97 density
+
+```{r}
+
+ME_TMEM97_10<- lmer(TMEM97_10~treatment*sex+(1|Case),data = dataMice)
+summary(ME_TMEM97_10)
+resid_panel(ME_TMEM97_10)
+# No effects of CT1812-16 or sex
+
+```
+
+
+
+### Abeta density
+
+```{r}
+
+ME_Abeta_10<- lmer(Abeta_10~treatment*sex+(1|Case),data = dataMice)
+summary(ME_Abeta_10)
+resid_panel(ME_Abeta_10)
+# No effects of CT1812-16 or sex
+
+
+pAbeta_10 <- ggplot(dataMice, aes(x = treatment, y = Abeta_10, fill = treatment)) +
+  stat_boxplot(geom ='errorbar', width = 0.2) +  #  CT1812ds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+#  stat_summary(fun.y = max, fun.ymax = length, geom = "text", aes(label = ..ymax..), vjust = -2)  + #CT1812ds group n's above bars
+  geom_point(data = CaseMeans, aes(x = treatment, y = Abeta_10, shape=sex, size = 5), position = position_jitter(w = 0.1, h = 0.0)) + # Makes data points means of each case and makes the points offset in the x direction so they don't overlap and makes males circles and females triangles
+  ylim(0,1500000000) + #sets y axis limits
+  ylab("Amyloid beta density 10um")  + # sets the y-axis label
+  xlab("")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("grey70","springgreen3")) # fills bars with colors I want
+
+pAbeta_10 + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank()) +theme(text = element_text(size=25))
+
+pAbeta_10_panel <- pAbeta_10 + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank()) 
+
+```
+
+
+## Colocalization
+
+### PSD95 with TMEM97
+
+```{r}
+ME_PSD95_with_TMEM97_10<- lmer(PSD95_with_TMEM97_10~treatment*sex+(1|Case),data = dataMice)
+summary(ME_PSD95_with_TMEM97_10)
+resid_panel(ME_PSD95_with_TMEM97_10)
+# No effects of CT1812-16 or sex 
+
+```
+
+
+
+### PSD95 with abeta
+
+```{r}
+
+ME_PSD95_with_abeta1_10 <- lmer(PSD95_with_abeta1_10~treatment*sex+(1|Case),data = dataMice)
+summary(ME_PSD95_with_abeta1_10)
+resid_panel(ME_PSD95_with_abeta1_10)
+# No effects of CT1812-16 or sex 
+
+```
+
+
+### PSD95 with TMEM97 and abeta
+
+```{r}
+
+ME_PSD95_with_abeta_and_TMEM97_10 <- lmer(PSD95_with_abeta_and_TMEM97_10~treatment*sex+(1|Case),data = dataMice)
+summary(ME_PSD95_with_abeta_and_TMEM97_10)
+resid_panel(ME_PSD95_with_abeta_and_TMEM97_10)
+# No effects of CT1812-16 or sex 
+
+```
+
+
+
+# Correlations
+
+```{r}
+
+# Get subset of data from CT1812 cases for correlations with drug concentration
+
+Treated_data<- subset(CaseMeans, CaseMeans$treatment == "CT1812")
+
+
+To_Correlate<- Treated_data [, c("RO", "TMEM97_density", "Abeta_density","PSD95_with_TMEM97", "PSD95_with_Abeta","PSD95_with_TMEM97_and_Abeta","Fret_Positive","PSD95_density")]
+
+
+rquery.cormat(To_Correlate)
+
+cormat<-rquery.cormat(To_Correlate, graphType = "heatmap")
+
+
+rquery.cormat(To_Correlate, type="flatten", graph=FALSE)
+
+
+# linear trend + confidence interval
+  ggplot(To_Correlate, aes(x=PSD95_with_TMEM97_and_Abeta, y=RO)) +
+  geom_point() +
+  geom_smooth(method=lm , color="red", fill="#69b3a2", se=TRUE) +
+  theme_classic()
+  
+  
+# linear trend + confidence interval
+  ggplot(To_Correlate, aes(x=TMEM97_density, y=RO)) +
+  geom_point() +
+  geom_smooth(method=lm , color="red", fill="#69b3a2", se=TRUE) +
+  theme_classic()
+  
+  # linear trend + confidence interval
+  ggplot(To_Correlate, aes(x=Fret_Positive, y=RO)) +
+  geom_point() +
+  geom_smooth(method=lm , color="red", fill="#69b3a2", se=TRUE) +
+  theme_classic()
+  
+  cor_KO <-cor.test(To_Correlate$RO, To_Correlate$PSD95_with_TMEM97,  method = "spearman") # pearson = normally distributed
+  cor_KO
+
+
+```
+
+
+
+# plaque distance
+
+```{r}
+# For plaque distance, subset to just those rows with plaque distance data and remove other rows except metadata
+
+dataMice_tidy <- dataMice
+
+dataMice_tidy$PSD95_density <- NULL 
+dataMice_tidy$TMEM97_density <- NULL 
+dataMice_tidy$Abeta_density <- NULL 
+dataMice_tidy$PSD95_with_TMEM97 <- NULL 
+dataMice_tidy$PSD95_with_Abeta <- NULL 
+dataMice_tidy$PSD95_with_TMEM97_and_Abeta <- NULL 
+
+
+# Use pivot_longer to transpose each of the plaque distance columns into a new dataframe
+dataMice_tidy2 <-
+dataMice_tidy %>% 
+  pivot_longer(
+    cols = starts_with("PSD95_den"), 
+    #names_to = () 
+    values_to = "rank",
+    values_drop_na = TRUE
+  )
+
+dataMice_tidy3 <-
+dataMice_tidy %>% 
+  pivot_longer(
+    cols = starts_with("TMEM97"), 
+    #names_to = () 
+    values_to = "rank",
+    values_drop_na = TRUE
+  )
+
+dataMice_tidy4 <-
+dataMice_tidy %>% 
+  pivot_longer(
+    cols = starts_with("PSD95_with_TMEM97"), 
+    #names_to = () 
+    values_to = "rank",
+    values_drop_na = TRUE
+  )
+
+dataMice_tidy5 <-
+dataMice_tidy %>% 
+  pivot_longer(
+    cols = starts_with("PSD95_with_abeta_and_TMEM97"), 
+    #names_to = () 
+    values_to = "rank",
+    values_drop_na = TRUE
+  )
+
+dataMice_tidy6 <-
+dataMice_tidy %>% 
+  pivot_longer(
+    cols = starts_with("PSD95_with_abeta1"), 
+    #names_to = () 
+    values_to = "rank",
+    values_drop_na = TRUE
+  )
+
+plaque_dist_data <-
+dataMice_tidy %>% 
+  pivot_longer(
+    cols = starts_with("Abeta"), 
+    #names_to = () 
+    values_to = "rank",
+    values_drop_na = TRUE,
+  )
+
+
+ 
+# combine all transposed plaque distance data and remove remaning non-transposed columns
+
+plaque_dist_data$PSD95_density <- dataMice_tidy2$rank
+plaque_dist_data$TMEM97_density <- dataMice_tidy3$rank
+plaque_dist_data$PSD95_with_TMEM97 <- dataMice_tidy4$rank
+plaque_dist_data$PSD95_with_TMEM97_and_Abeta <- dataMice_tidy5$rank
+plaque_dist_data$PSD95_with_Abeta <- dataMice_tidy6$rank
+plaque_dist_data <- rename(plaque_dist_data, Abeta_density = rank)
+plaque_dist_data <- rename(plaque_dist_data, plaque_distance = name)
+plaque_dist_data$PSD95_den_10 <- NULL
+plaque_dist_data$PSD95_den_20 <- NULL
+plaque_dist_data$PSD95_den_30 <- NULL
+plaque_dist_data$PSD95_den_40 <- NULL
+plaque_dist_data$PSD95_den_50 <- NULL
+plaque_dist_data$TMEM97_10 <- NULL
+plaque_dist_data$TMEM97_20 <- NULL
+plaque_dist_data$TMEM97_30 <- NULL
+plaque_dist_data$TMEM97_40 <- NULL
+plaque_dist_data$TMEM97_50 <- NULL
+plaque_dist_data$PSD95_with_abeta1_10 <- NULL
+plaque_dist_data$PSD95_with_abeta1_20 <- NULL
+plaque_dist_data$PSD95_with_abeta1_30 <- NULL
+plaque_dist_data$PSD95_with_abeta1_40 <- NULL
+plaque_dist_data$PSD95_with_abeta1_50 <- NULL
+plaque_dist_data$PSD95_with_abeta_and_TMEM97_10 <- NULL
+plaque_dist_data$PSD95_with_abeta_and_TMEM97_20 <- NULL
+plaque_dist_data$PSD95_with_abeta_and_TMEM97_30 <- NULL
+plaque_dist_data$PSD95_with_abeta_and_TMEM97_40 <- NULL
+plaque_dist_data$PSD95_with_abeta_and_TMEM97_50 <- NULL
+plaque_dist_data$PSD95_with_TMEM97_10 <- NULL
+plaque_dist_data$PSD95_with_TMEM97_20 <- NULL
+plaque_dist_data$PSD95_with_TMEM97_30 <- NULL
+plaque_dist_data$PSD95_with_TMEM97_40 <- NULL
+plaque_dist_data$PSD95_with_TMEM97_50 <- NULL
+
+plaque_dist_data <- plaque_dist_data %>%
+     mutate(plaque_distance=sub("Abeta_","", plaque_distance))
+
+plaque_dist_data <- plaque_dist_data %>%
+     mutate(plaque_distance=sub(" ","", plaque_distance))
+
+plaque_dist_data$plaque_distance <- (as.numeric(plaque_dist_data$plaque_distance))
+write.csv(x=plaque_dist_data, file="plaque_dist_data.csv")
+
+plaque_dist_data$plaque_distance_factor <- as.factor(plaque_dist_data$plaque_distance)
+plaque_dist_data$plaque_distance_factor <- relevel(plaque_dist_data$plaque_distance_factor, ref = "50")
+
+plaque_dist_data$plaque_distance_graph <- as.factor(plaque_dist_data$plaque_distance)
+plaque_dist_data$plaque_distance_graph  <- relevel(plaque_dist_data$plaque_distance_graph , ref = "10")
+
+#Create new dataframe with means per case of plaque distance data for plotting use na.rm=T to ignore empty cells that are automatically filled with NA
+
+plaque_dist_data %>%
+  group_by(Case, plaque_distance) %>%
+  summarize(treatment=treatment[1],
+            sex=sex[1],
+            age_at_death=Age_at_death[1],
+            PSD95_density=mean(PSD95_density, na.rm=T),
+            TMEM97_density=mean(TMEM97_density, na.rm=T),
+            Abeta_density=mean(Abeta_density, na.rm=T),
+            PSD95_with_TMEM97=median(PSD95_with_TMEM97, na.rm=T),
+            PSD95_with_Abeta=median(PSD95_with_Abeta, na.rm=T),
+            PSD95_with_TMEM97_and_Abeta=median(PSD95_with_TMEM97_and_Abeta, na.rm=T),
+            Fret_Positive=mean(Fret_Positive, na.rm=T),
+            brain_CT1812=mean(brain_CT1812, na.rm=T),
+            plaque_distance_factor=plaque_distance_factor[1],
+            plaque_distance_graph=plaque_distance_graph[1],
+            RO=mean(RO, na.rm=T),
+            nM=mean(nM, na.rm=T)
+            ) -> plaque_dist_CaseMeans
+
+
+```
+
+## PSD95 density
+
+```{r}
+
+ME_plaque_dist_PSD<- lmer(PSD95_density~treatment*plaque_distance_factor+sex+(1|Case/Image_name),data = plaque_dist_data)
+summary(ME_plaque_dist_PSD)
+resid_panel(ME_plaque_dist_PSD)
+
+anova(ME_plaque_dist_PSD)
+
+emmeans(ME_plaque_dist_PSD, pairwise ~ treatment*plaque_distance_factor, adjust="tukey")
+
+
+pRO <- ggplot(plaque_dist_data, aes(x = plaque_distance_graph, y = PSD95_density, fill = treatment)) +
+  stat_boxplot(geom ='errorbar', width = 0.2,position = position_dodge(0.75)) +  #  CT1812ds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+  geom_point(data = plaque_dist_CaseMeans, aes(x = plaque_distance_graph, y = PSD95_density, colour=treatment, shape=treatment), size=2, position=position_jitterdodge(jitter.width = 0.2, jitter.height = 0))+ 
+  scale_shape_manual(values = c(17, 16))+
+   ylim(0,1500000000) + #sets y axis limits
+  ylab("PSD density (PSD/mm3)")  + # sets the y-axis label
+  xlab("distance from plaque (microns)")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("grey70","springgreen3")) # fills bars with colors I want
+pRO + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank())  +theme(text = element_text(size=25))
+pRO_panel <- pRO + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank()) 
+
+
+pRO <-ggplot(data=plaque_dist_CaseMeans, aes(x=plaque_distance_graph, y=PSD95_density,  fill=treatment, color=treatment))+
+stat_summary(fun=mean, geom="line", position = position_dodge(0.3), aes(group=treatment))  + 
+stat_summary(fun=mean, geom="point",position = position_dodge(0.3))+
+stat_boxplot(geom="errorbar", width = 0.2, position = position_dodge(0.3), data=plaque_dist_data)+
+geom_point(data = plaque_dist_CaseMeans, aes(x = plaque_distance_graph, y = PSD95_density, colour=treatment, shape=sex), size=2, position = position_dodge(0.3))+ 
+scale_shape_manual(values = c(17, 16)) +
+   ylim(0,1500000000) + #sets y axis limits
+  ylab("PSD density (PSD/mm3)")  + # sets the y-axis label
+  xlab("distance from plaque (microns)")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+  theme(legend.position="none")  #removes legend since labels on x axis sufficient
+pRO + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank())  +theme(text = element_text(size=25))
+
+
+```
+
+## TMEM97 density (REVISE!!!)
+
+```{r}
+
+
+ME_plaque_dist_PSD<- lmer(TMEM97_density~treatment*plaque_distance_factor+sex+(1|Case/Image_name),data = plaque_dist_data)
+summary(ME_plaque_dist_PSD)
+resid_panel(ME_plaque_dist_PSD)
+
+anova(ME_plaque_dist_PSD)
+
+emmeans(ME_plaque_dist_PSD, pairwise ~ treatment*plaque_distance_factor, adjust="tukey")
+
+
+
+pRO <- ggplot(plaque_dist_data, aes(x = plaque_distance_graph, y = TMEM97_density, fill = treatment)) +
+  stat_boxplot(geom ='errorbar', width = 0.2,position = position_dodge(0.75)) +  #  CT1812ds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+  geom_point(data = plaque_dist_CaseMeans, aes(x = plaque_distance_graph, y = TMEM97_density, colour=treatment, shape=treatment), size=2, position=position_jitterdodge(jitter.width = 0.2, jitter.height = 0))+ 
+  scale_shape_manual(values = c(17, 16))+
+   ylim(0,1500000000) + #sets y axis limits
+  ylab("PSD density (PSD/mm3)")  + # sets the y-axis label
+  xlab("distance from plaque (microns)")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("grey70","springgreen3")) # fills bars with colors I want
+pRO + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank())  +theme(text = element_text(size=25))
+pRO_panel <- pRO + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank()) 
+
+
+pRO <-ggplot(data=plaque_dist_CaseMeans, aes(x=plaque_distance_graph, y=TMEM97_density,  fill=treatment, color=treatment))+
+stat_summary(fun=mean, geom="line", position = position_dodge(0.3), aes(group=treatment))  + 
+stat_summary(fun=mean, geom="point",position = position_dodge(0.3))+
+stat_boxplot(geom="errorbar", width = 0.2, position = position_dodge(0.3), data=plaque_dist_data)+
+geom_point(data = plaque_dist_CaseMeans, aes(x = plaque_distance_graph, y = TMEM97_density, colour=treatment, shape=sex), size=2, position = position_dodge(0.3))+ 
+scale_shape_manual(values = c(17, 16)) +
+   ylim(0,1500000000) + #sets y axis limits
+  ylab("TMEM97 density (objects/mm3)")  + # sets the y-axis label
+  xlab("distance from plaque (microns)")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+  theme(legend.position="none")  #removes legend since labels on x axis sufficient
+pRO + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank())  +theme(text = element_text(size=25))
+
+
+```
+
+## Abeta density
+
+```{r}
+
+
+ME_plaque_dist_PSD<- lmer(Abeta_density~treatment*plaque_distance_factor+sex+(1|Case/Image_name),data = plaque_dist_data)
+summary(ME_plaque_dist_PSD)
+resid_panel(ME_plaque_dist_PSD)
+
+anova(ME_plaque_dist_PSD)
+
+emmeans(ME_plaque_dist_PSD, pairwise ~ treatment*plaque_distance_factor, adjust="tukey")
+
+
+
+pRO <- ggplot(plaque_dist_data, aes(x = plaque_distance_graph, y = Abeta_density, fill = treatment)) +
+  stat_boxplot(geom ='errorbar', width = 0.2,position = position_dodge(0.75)) +  #  CT1812ds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+  geom_point(data = plaque_dist_CaseMeans, aes(x = plaque_distance_graph, y = Abeta_density, colour=treatment, shape=treatment), size=2, position=position_jitterdodge(jitter.width = 0.2, jitter.height = 0))+ 
+  scale_shape_manual(values = c(17, 16))+
+   ylim(0,1500000000) + #sets y axis limits
+  ylab("PSD density (PSD/mm3)")  + # sets the y-axis label
+  xlab("distance from plaque (microns)")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("grey70","springgreen3")) # fills bars with colors I want
+pRO + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank())  +theme(text = element_text(size=25))
+pRO_panel <- pRO + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank()) 
+
+
+pRO <-ggplot(data=plaque_dist_CaseMeans, aes(x=plaque_distance_graph, y=Abeta_density,  fill=treatment, color=treatment))+
+stat_summary(fun=mean, geom="line", position = position_dodge(0.3), aes(group=treatment))  + 
+stat_summary(fun=mean, geom="point",position = position_dodge(0.3))+
+stat_boxplot(geom="errorbar", width = 0.2, position = position_dodge(0.3), data=plaque_dist_data)+
+geom_point(data = plaque_dist_CaseMeans, aes(x = plaque_distance_graph, y = Abeta_density, colour=treatment, shape=sex), size=2, position = position_dodge(0.3))+ 
+scale_shape_manual(values = c(17, 16)) +
+   ylim(0,1500000000) + #sets y axis limits
+  ylab("TMEM97 density (objects/mm3)")  + # sets the y-axis label
+  xlab("distance from plaque (microns)")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+  theme(legend.position="none")  #removes legend since labels on x axis sufficient
+pRO + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank())  +theme(text = element_text(size=25))
+
+
+```
+
+
+## PSD95 with TMEM97
+
+```{r}
+
+
+ME_plaque_dist_PSD<- lmer(PSD95_with_TMEM97~treatment*plaque_distance_factor+sex+(1|Case/Image_name),data = plaque_dist_data)
+summary(ME_plaque_dist_PSD)
+resid_panel(ME_plaque_dist_PSD)
+
+anova(ME_plaque_dist_PSD)
+
+emmeans(ME_plaque_dist_PSD, pairwise ~ treatment*plaque_distance_factor, adjust="tukey")
+
+
+
+pRO <- ggplot(plaque_dist_data, aes(x = plaque_distance_graph, y = PSD95_with_TMEM97, fill = treatment)) +
+  stat_boxplot(geom ='errorbar', width = 0.2,position = position_dodge(0.75)) +  #  CT1812ds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+  geom_point(data = plaque_dist_CaseMeans, aes(x = plaque_distance_graph, y = PSD95_with_TMEM97, colour=treatment, shape=treatment), size=2, position=position_jitterdodge(jitter.width = 0.2, jitter.height = 0))+ 
+  scale_shape_manual(values = c(17, 16))+
+   ylim(0,50) + #sets y axis limits
+  ylab("PSD95 with TMEM97 (%)")  + # sets the y-axis label
+  xlab("distance from plaque (microns)")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("grey70","springgreen3")) # fills bars with colors I want
+pRO + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank())  +theme(text = element_text(size=25))
+pRO_panel <- pRO + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank()) 
+
+
+pRO <-ggplot(data=plaque_dist_CaseMeans, aes(x=plaque_distance_graph, y=PSD95_with_TMEM97,  fill=treatment, color=treatment))+
+stat_summary(fun=mean, geom="line", position = position_dodge(0.3), aes(group=treatment))  + 
+stat_summary(fun=mean, geom="point",position = position_dodge(0.3))+
+stat_boxplot(geom="errorbar", width = 0.2, position = position_dodge(0.3), data=plaque_dist_data)+
+geom_point(data = plaque_dist_CaseMeans, aes(x = plaque_distance_graph, y = PSD95_with_TMEM97, colour=treatment, shape=sex), size=2, position = position_dodge(0.3))+ 
+scale_shape_manual(values = c(17, 16)) +
+   ylim(0,50) + #sets y axis limits
+  ylab("PSD95 with TMEM97 (%)")  + # sets the y-axis label
+  xlab("distance from plaque (microns)")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+  theme(legend.position="none")  #removes legend since labels on x axis sufficient
+pRO + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank())  +theme(text = element_text(size=25))
+
+
+```
+
+
+## PSD95 with Abeta
+
+```{r}
+
+
+ME_plaque_dist_PSD<- lmer(PSD95_with_Abeta~treatment*plaque_distance_factor+sex+(1|Case/Image_name),data = plaque_dist_data)
+summary(ME_plaque_dist_PSD)
+resid_panel(ME_plaque_dist_PSD)
+
+anova(ME_plaque_dist_PSD)
+
+emmeans(ME_plaque_dist_PSD, pairwise ~ treatment*plaque_distance_factor, adjust="tukey")
+
+
+
+pRO <- ggplot(plaque_dist_data, aes(x = plaque_distance_graph, y = PSD95_with_Abeta, fill = treatment)) +
+  stat_boxplot(geom ='errorbar', width = 0.2,position = position_dodge(0.75)) +  #  CT1812ds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+  geom_point(data = plaque_dist_CaseMeans, aes(x = plaque_distance_graph, y = PSD95_with_Abeta, colour=treatment, shape=treatment), size=2, position=position_jitterdodge(jitter.width = 0.2, jitter.height = 0))+ 
+  scale_shape_manual(values = c(17, 16))+
+   ylim(0,50) + #sets y axis limits
+  ylab("PSD95 with Abeta (%)")  + # sets the y-axis label
+  xlab("distance from plaque (microns)")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("grey70","springgreen3")) # fills bars with colors I want
+pRO + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank())  +theme(text = element_text(size=25))
+pRO_panel <- pRO + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank()) 
+
+
+pRO <-ggplot(data=plaque_dist_CaseMeans, aes(x=plaque_distance_graph, y=PSD95_with_Abeta,  fill=treatment, color=treatment))+
+stat_summary(fun=mean, geom="line", position = position_dodge(0.3), aes(group=treatment))  + 
+stat_summary(fun=mean, geom="point",position = position_dodge(0.3))+
+stat_boxplot(geom="errorbar", width = 0.2, position = position_dodge(0.3), data=plaque_dist_data)+
+geom_point(data = plaque_dist_CaseMeans, aes(x = plaque_distance_graph, y = PSD95_with_Abeta, colour=treatment, shape=sex), size=2, position = position_dodge(0.3))+ 
+scale_shape_manual(values = c(17, 16)) +
+   ylim(0,50) + #sets y axis limits
+  ylab("PSD95 with Abeta (%)")  + # sets the y-axis label
+  xlab("distance from plaque (microns)")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+  theme(legend.position="none")  #removes legend since labels on x axis sufficient
+pRO + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank())  +theme(text = element_text(size=25))
+
+
+```
+
+
+## PSD95 with TMEM97 and Abeta
+
+```{r}
+
+
+ME_plaque_dist_PSD<- lmer(PSD95_with_TMEM97_and_Abeta~treatment*plaque_distance_factor+sex+(1|Case/Image_name),data = plaque_dist_data)
+summary(ME_plaque_dist_PSD)
+resid_panel(ME_plaque_dist_PSD)
+
+anova(ME_plaque_dist_PSD)
+
+emmeans(ME_plaque_dist_PSD, pairwise ~ treatment*plaque_distance_factor, adjust="tukey")
+
+
+
+pRO <- ggplot(plaque_dist_data, aes(x = plaque_distance_graph, y = PSD95_with_TMEM97_and_Abeta, fill = treatment)) +
+  stat_boxplot(geom ='errorbar', width = 0.2,position = position_dodge(0.75)) +  #  CT1812ds the little horizontal lines on top and bottom of whiskers
+  geom_boxplot(outlier.size = -1, width=0.75) +  # makes it not show outliers twice (because of jitter)
+  geom_point(data = plaque_dist_CaseMeans, aes(x = plaque_distance_graph, y = PSD95_with_TMEM97_and_Abeta, colour=treatment, shape=treatment), size=2, position=position_jitterdodge(jitter.width = 0.2, jitter.height = 0))+ 
+  scale_shape_manual(values = c(17, 16))+
+   ylim(0,10) + #sets y axis limits
+  ylab("PSD95 with TMEM97 and Abeta (%)")  + # sets the y-axis label
+  xlab("distance from plaque (microns)")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+  theme(legend.position="none") + #removes legend since labels on x axis sufficient
+  scale_colour_manual(values=c("black","black","black","black")) + #makes outlines and dots black
+  scale_fill_manual(values=c("grey70","springgreen3")) # fills bars with colors I want
+pRO + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank())  +theme(text = element_text(size=25))
+pRO_panel <- pRO + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank()) 
+
+
+pRO <-ggplot(data=plaque_dist_CaseMeans, aes(x=plaque_distance_graph, y=PSD95_with_TMEM97_and_Abeta,  fill=treatment, color=treatment))+
+stat_summary(fun=mean, geom="line", position = position_dodge(0.3), aes(group=treatment))  + 
+stat_summary(fun=mean, geom="point",position = position_dodge(0.3))+
+stat_boxplot(geom="errorbar", width = 0.2, position = position_dodge(0.3), data=plaque_dist_data)+
+geom_point(data = plaque_dist_CaseMeans, aes(x = plaque_distance_graph, y = PSD95_with_TMEM97_and_Abeta, colour=treatment, shape=sex), size=2, position = position_dodge(0.3))+ 
+scale_shape_manual(values = c(17, 16)) +
+   ylim(0,10) + #sets y axis limits
+  ylab("PSD95 with TMEM97 and Abeta (%)")  + # sets the y-axis label
+  xlab("distance from plaque (microns)")  + # sets the x-axis label
+  theme_classic(base_size = 9) + #classic theme makes white background without lines
+  theme(legend.position="none")  #removes legend since labels on x axis sufficient
+pRO + geom_hline(yintercept=0) +  theme(axis.line.x = element_line(colour = "white")) + theme(axis.ticks.x=element_blank())  +theme(text = element_text(size=25))
+
+
+```
+
+
