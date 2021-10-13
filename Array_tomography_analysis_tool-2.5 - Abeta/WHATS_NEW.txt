@@ -1,0 +1,36 @@
+190731
+- Plaque distance: - plaque boundary is done from the original mask (not dilated).
+		   - results are saved for each case while running.
+- Colocalization:  - results are saved for each case while running.
+
+190624
+- Plaque distance: fixed distance calculations.
+
+190624
+- Colocalization: Parameters saved in an Excel file.
+- Plaque distance: Fixed issue with empty images (no plaque or no objects).
+
+
+190606
+- Colocalization: Instead of percentage of objects, number of objects colocalizing.
+- Segment_previsualize: Previsualization is the whole image, not cropp. Bug fixed.
+
+
+190514
+- Alignment: removed .tif.tif issue.
+- 3D filtering: faster way using object properties.
+- Segmentation: fixed value threshold option added.
+- Plaque distances: In case that there is no plaque (object<10000px), use central pixel.
+
+
+190507
+- Densities: Corrected calculations of objects/mm3
+- Segmentation: Correction is now made from a mean NOT median value of the whole image (before were errors with dark images)
+
+
+190327 
+- Neuropil mask: - The area of neuropil was the oposite. Now it is fixed.
+		 - New output: Object density in mm3 (depending of the resolution, asked at the begining).
+- Plaque distances: - Neuropil marsk is applyed to all the channels.
+        - Areas of each bin are calculated according to Neuropil mask + plaque Mask.
+
